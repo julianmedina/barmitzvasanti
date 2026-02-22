@@ -7,7 +7,7 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, T
 
 export default function SantiNoEsSantiScreen() {
     const [message, setMessage] = useState('');
-    const [socialPrompt, setSocialPrompt] = useState('SANTI NO ES SANTI SIN...');
+    const [socialPrompt, setSocialPrompt] = useState('Santi no es Santi sin...');
     const [isSending, setIsSending] = useState(false);
     const router = useRouter();
 
@@ -45,7 +45,7 @@ export default function SantiNoEsSantiScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                     <FontAwesome name="arrow-left" size={24} color="white" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Muro Social</Text>
+                <Text style={styles.headerTitle}>Santi no es Santi...</Text>
             </View>
 
             <KeyboardAvoidingView
@@ -57,7 +57,7 @@ export default function SantiNoEsSantiScreen() {
                 <Text style={styles.title}>COMPLETÁ LA FRASE</Text>
 
                 <View style={styles.phraseContainer}>
-                    <Text style={styles.phraseStatic}>"{socialPrompt.toUpperCase()}"</Text>
+                    <Text style={styles.phraseStatic}>"{socialPrompt}"</Text>
                 </View>
 
                 <TextInput
