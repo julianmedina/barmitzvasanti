@@ -3,7 +3,7 @@ import { NewsAlert, subscribeToConfigs, subscribeToLeaderboard, subscribeToMedia
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, LayoutAnimation, Platform, StyleSheet, Text, UIManager, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, LayoutAnimation, Platform, StyleSheet, Text, UIManager, View } from 'react-native';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
