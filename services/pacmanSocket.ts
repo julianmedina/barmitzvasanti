@@ -3,7 +3,7 @@ import { auth } from './firebaseConfig';
 
 const BACKEND_URL = __DEV__
     ? 'http://localhost:3000'
-    : 'https://pacman.santiagomedina.com.ar';
+    : 'https://santiagomedina.com.ar';
 
 class PacmanSocketService {
     private socket: Socket | null = null;

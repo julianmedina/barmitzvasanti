@@ -59,7 +59,8 @@ export default function PacmanLobbyScreen() {
 
     const fetchPlayerCount = async () => {
         try {
-            const response = await fetch('http://localhost:3000/api/game/status');
+            const baseUrl = __DEV__ ? 'http://localhost:3000' : 'https://santiagomedina.com.ar';
+            const response = await fetch(`${baseUrl}/api/game/status`);
             const data = await response.json();
             setPlayerCount(data.playerCount);
         } catch (error) {
