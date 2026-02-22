@@ -1,0 +1,49 @@
+# BarMitzva Project Rules (.cursorrules)
+# "El Bar de Medina" — Interactive Bar Mitzva party app
+
+## Project
+- Expo / React Native app (SDK 54, React 19, TypeScript)
+- Firebase: Firestore (DB name: "barmitzvamedina"), Storage, Anonymous Auth
+- Backend: Node.js + Socket.IO for multiplayer Pacman
+- Routing: expo-router (file-based)
+
+## Directory Map
+- `app/` — Screens (expo-router file-based routing)
+- `app/(tabs)/` — Tab navigator (Home, Games)
+- `app/games/` — Game screens (pacman, roulette, soccer, trivia)
+- `app/social/` — Social features (messages, homenajes)
+- `app/admin/` — Admin panel (PIN protected)
+- `app/dashboard/` — Projector dashboard
+- `backend/` — Pacman multiplayer Node.js server
+- `services/` — Firebase + Socket.IO services
+- `components/` — Shared React Native components
+- `constants/theme.ts` — Colors and fonts
+- `functions/` — Firebase Cloud Functions
+
+## Conventions
+- Use `StyleSheet.create()` for styles
+- Colors: `Colors.elegant.*` (dark theme), `Colors.river.*` (red), `Colors.macabi.*` (blue)
+- Fonts: `Fonts.sans`, `Fonts.bold`, `Fonts.light` (Montserrat)
+- Dark theme default: bg `#121212`, text white, accent gold `#D4AF37`
+- All Firestore ops via `services/database.ts`
+- Socket ops via `services/pacmanSocket.ts` singleton
+- Score: call `updatePlayerScore(points)` — cumulative
+- Auth: Anonymous Firebase sign-in on app load
+- Data: `onSnapshot` for real-time, return unsubscribe
+- Navigation: `useRouter()` → `push()` / `replace()` / `back()`
+- Always `sanitize()` data before Firestore writes
+
+## Games
+1. **Pacman Gigante** — Multiplayer (Socket.IO), lobby + game screen, joystick/keyboard
+2. **Trivia Medina** — 5 questions, timer, score
+3. **La Ruleta** — Spinning animation, random dare, camera
+4. **Hacele un Caño** — Soccer, movement + shooting + collision
+
+## Firebase Collections
+scores, profiles, messages, news, homenajes, media, configs, tokens
+
+## Run
+- Frontend: `npx expo start --web` (port 8081)
+- Backend: `cd backend && npm run dev` (port 3000)
+- Deploy web: `npx expo export --platform web && vercel --prod`
+- Deploy Firebase: `firebase deploy`
