@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "prepare-pwa": "node ./scripts/copy-pwa-icons.js",
-    "postinstall": "node ./scripts/patch-webview-web.js"
+    "postinstall": "node ./scripts/patch-webview-web.js",
+    "deploy:prod": "bash scripts/deploy-production.sh"
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.4.2",
@@ -44,6 +45,7 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-draggable-flatlist": "^4.0.3",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
