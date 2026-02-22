@@ -49,7 +49,7 @@ export default function HomeScreen() {
           <View style={[styles.iconCircle, { backgroundColor: Colors.river.primary }]}>
             <FontAwesome name="commenting" size={30} color="white" />
           </View>
-          <Text style={styles.menuText}>Muro Social</Text>
+          <Text style={styles.menuText}>Santi no es Santi sin</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/selfie/index')}>

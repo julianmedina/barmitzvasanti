@@ -70,7 +70,7 @@ export default function SelfieScreen() {
         setIsUploading(true);
         try {
             const user = auth.currentUser;
-            const userId = user?.uid || 'guest';
+            const userId = user?.uid ?? 'guest';
 
             // 1. Upload to Storage
             const path = `selfies/${userId}_${Date.now()}.jpg`;
@@ -88,9 +88,13 @@ export default function SelfieScreen() {
                 "Tu selfie se subió correctamente. ¡Buscate en el Dashboard!",
                 [{ text: "OK", onPress: () => router.back() }]
             );
-        } catch (error) {
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
             console.error("Error in confirmPicture:", error);
-            Alert.alert("Error", "No se pudo subir la foto. Reintentá en un momento.");
+            Alert.alert(
+                "Error al subir la foto",
+                "No se pudo subir la selfie. Revisá que tengas conexión a internet y permisos de la app. Reintentá en un momento.\n\nDetalle: " + message
+            );
         } finally {
             setIsUploading(false);
         }

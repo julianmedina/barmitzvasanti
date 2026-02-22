@@ -1,95 +1,200 @@
 import { Colors, Fonts } from '@/constants/theme';
-import { updatePlayerScore } from '@/services/database';
+import { getTriviaQuestionsOnce, getTriviaVideosOnce, getTriviaVideoPlayback, TriviaQuestion, TriviaVideo, updatePlayerScore } from '@/services/database';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { Audio, Video } from 'expo-av';
 import { Stack, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import TriviaYouTubePlayer from './TriviaYouTubePlayer';
 
-const QUESTIONS = [
-    {
-        id: 1,
-        question: "¿De qué cuadro es hincha fanático Santi?",
-        options: ["Boca Juniors", "River Plate", "Racing", "San Lorenzo"],
-        correct: 1 // Index
-    },
-    {
-        id: 2,
-        question: "¿Cuál es su comida favorita?",
-        options: ["Sushi", "Asado", "Milanesa con Puré", "Fideos con Tuco"],
-        correct: 2
-    },
-    {
-        id: 3,
-        question: "¿Cómo le dicen sus amigos del club?",
-        options: ["Santi", "Medina", "El 10", "Tanque"],
-        correct: 1
-    },
-    {
-        id: 4,
-        question: "¿En qué posición juega al fútbol?",
-        options: ["Arquero", "Defensor", "Mediocampista", "Delantero"],
-        correct: 1
-    },
-    {
-        id: 5,
-        question: "¿Cuál es su materia preferida en el colegio?",
-        options: ["Matemática", "Gimnasia", "Historia", "Recreo"],
-        correct: 3
-    }
+const TOTAL_GAME_SECONDS = 30;
+const SECONDS_PER_QUESTION = 8;
+
+// Fallback if DB has no questions
+const FALLBACK_QUESTIONS: TriviaQuestion[] = [
+    { question: '¿De qué cuadro es Medina?', options: ['Boca', 'River', 'Atlanta', 'Racing'], correctIndex: 1, order: 0 }
 ];
 
-const TIME_PER_QUESTION = 10; // Seconds
+function shuffle<T>(arr: T[]): T[] {
+    const out = [...arr];
+    for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+}
 
 export default function TriviaGame() {
+    const [questions, setQuestions] = useState<TriviaQuestion[]>([]);
+    const [videos, setVideos] = useState<TriviaVideo[]>([]);
+    const [loading, setLoading] = useState(true);
     const [currentQIndex, setCurrentQIndex] = useState(0);
+    const [shuffledQuestions, setShuffledQuestions] = useState<TriviaQuestion[]>([]);
     const [score, setScore] = useState(0);
-    const [timeLeft, setTimeLeft] = useState(TIME_PER_QUESTION);
+    const [totalTimeLeft, setTotalTimeLeft] = useState(TOTAL_GAME_SECONDS);
+    const [questionTimeLeft, setQuestionTimeLeft] = useState(SECONDS_PER_QUESTION);
     const [gameOver, setGameOver] = useState(false);
     const [gameStarted, setGameStarted] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showVideo, setShowVideo] = useState(false);
+    const [currentVideoPlayback, setCurrentVideoPlayback] = useState<{ type: 'youtube'; youtubeId: string } | { type: 'drive'; url: string } | null>(null);
+    const [answered, setAnswered] = useState(false);
 
     const router = useRouter();
+    const totalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const questionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const soundCorrectRef = useRef<Audio.Sound | null>(null);
+    const soundWrongRef = useRef<Audio.Sound | null>(null);
+    const scoreRef = useRef(0);
+    scoreRef.current = score;
 
-    // Timer Logic
+    const loadSounds = useCallback(async () => {
+        try {
+            await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, staysActiveInBackground: false, shouldDuckAndroid: true, playThroughEarpieceAndroid: false });
+            const { sound: s1 } = await Audio.Sound.createAsync(
+                { uri: 'https://assets.mixkit.co/active_storage/sfx/2000.m4a' } // short correct
+            );
+            soundCorrectRef.current = s1;
+            const { sound: s2 } = await Audio.Sound.createAsync(
+                { uri: 'https://assets.mixkit.co/active_storage/sfx/2568.m4a' } // wrong
+            );
+            soundWrongRef.current = s2;
+        } catch (e) {
+            console.warn('Trivia sounds failed to load', e);
+        }
+    }, []);
+
     useEffect(() => {
-        if (!gameStarted || gameOver) return;
+        let mounted = true;
+        (async () => {
+            try {
+                const [qList, vList] = await Promise.all([getTriviaQuestionsOnce(), getTriviaVideosOnce()]);
+                if (mounted) {
+                    setQuestions(qList);
+                    setVideos(vList);
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        })();
+        return () => { mounted = false; };
+    }, []);
 
-        if (timeLeft === 0) {
-            handleTimeUp();
+    const startGame = useCallback(() => {
+        const list = questions.length > 0 ? questions : FALLBACK_QUESTIONS;
+        setShuffledQuestions(shuffle(list));
+        setGameStarted(true);
+        setGameOver(false);
+        setScore(0);
+        setCurrentQIndex(0);
+        setTotalTimeLeft(TOTAL_GAME_SECONDS);
+        setQuestionTimeLeft(SECONDS_PER_QUESTION);
+        setShowVideo(false);
+        setCurrentVideoPlayback(null);
+        setAnswered(false);
+        loadSounds();
+    }, [questions, loadSounds]);
+
+    const list = useMemo(() => shuffledQuestions.length ? shuffledQuestions : (questions.length ? questions : FALLBACK_QUESTIONS), [shuffledQuestions, questions]);
+    const currentQ = list[currentQIndex];
+    const displayOptions = useMemo(() => {
+        if (!currentQ) return { options: [] as string[], correctIndex: 0 };
+        const opts = shuffle([...currentQ.options]);
+        const correctIndex = opts.indexOf(currentQ.options[currentQ.correctIndex]);
+        return { options: opts, correctIndex };
+    }, [currentQIndex, currentQ?.question]);
+
+    // Total 30s countdown
+    useEffect(() => {
+        if (!gameStarted || gameOver || showVideo) return;
+        if (totalTimeLeft <= 0) {
+            endGame(scoreRef.current);
             return;
         }
-
-        const timer = setInterval(() => {
-            setTimeLeft(prev => prev - 1);
+        totalTimerRef.current = setInterval(() => {
+            setTotalTimeLeft(prev => {
+                if (prev <= 1) {
+                    if (totalTimerRef.current) clearInterval(totalTimerRef.current);
+                    return 0;
+                }
+                return prev - 1;
+            });
         }, 1000);
+        return () => {
+            if (totalTimerRef.current) clearInterval(totalTimerRef.current);
+        };
+    }, [gameStarted, gameOver, showVideo, totalTimeLeft, score]);
 
-        return () => clearInterval(timer);
-    }, [timeLeft, gameStarted, gameOver]);
-
-    const handleTimeUp = () => {
-        handleAnswer(-1);
-    };
-
-    const handleAnswer = (selectedOptionIndex: number) => {
-        const currentQ = QUESTIONS[currentQIndex];
-        let newScore = score;
-
-        if (selectedOptionIndex === currentQ.correct) {
-            newScore += 100 + (timeLeft * 10);
+    // Per-question countdown (only when not answered)
+    useEffect(() => {
+        if (!gameStarted || gameOver || showVideo || answered) return;
+        if (questionTimeLeft <= 0) {
+            handleAnswer(-1);
+            return;
         }
+        questionTimerRef.current = setInterval(() => {
+            setQuestionTimeLeft(prev => prev - 1);
+        }, 1000);
+        return () => {
+            if (questionTimerRef.current) clearInterval(questionTimerRef.current);
+        };
+    }, [gameStarted, gameOver, showVideo, questionTimeLeft, answered]);
 
-        setScore(newScore);
+    const pickRandomVideo = useCallback((): { type: 'youtube'; youtubeId: string } | { type: 'drive'; url: string } | null => {
+        const valid = videos.map((v) => getTriviaVideoPlayback(v)).filter((x): x is NonNullable<ReturnType<typeof getTriviaVideoPlayback>> => x != null);
+        if (valid.length === 0) return null;
+        return valid[Math.floor(Math.random() * valid.length)];
+    }, [videos]);
 
-        if (currentQIndex + 1 < QUESTIONS.length) {
-            setCurrentQIndex(prev => prev + 1);
-            setTimeLeft(TIME_PER_QUESTION);
+    const handleAnswer = useCallback((selectedOptionIndex: number) => {
+        if (answered) return;
+        setAnswered(true);
+        const list = shuffledQuestions.length ? shuffledQuestions : (questions.length ? questions : FALLBACK_QUESTIONS);
+        const q = list[currentQIndex];
+        if (!q) return;
+        const isCorrect = selectedOptionIndex === displayOptions.correctIndex;
+        if (isCorrect) {
+            const points = 100 + questionTimeLeft * 10;
+            setScore(s => s + points);
+            soundCorrectRef.current?.replayAsync().catch(() => {});
+            nextQuestion();
         } else {
-            endGame(newScore);
+            // Perdiste: sonido y ver video; después del video va a pantalla de resultado
+            soundWrongRef.current?.replayAsync().catch(() => {});
+            const playback = pickRandomVideo();
+            if (playback) {
+                setCurrentVideoPlayback(playback);
+                setShowVideo(true);
+            } else {
+                endGame(scoreRef.current);
+            }
         }
-    };
+    }, [answered, shuffledQuestions, currentQIndex, questions, questionTimeLeft, pickRandomVideo, displayOptions]);
+
+    const nextQuestion = useCallback(() => {
+        const list = shuffledQuestions.length ? shuffledQuestions : (questions.length ? questions : FALLBACK_QUESTIONS);
+        if (currentQIndex + 1 >= list.length) {
+            setShuffledQuestions(shuffle(questions.length ? questions : FALLBACK_QUESTIONS));
+            setCurrentQIndex(0);
+        } else {
+            setCurrentQIndex(prev => prev + 1);
+        }
+        setQuestionTimeLeft(SECONDS_PER_QUESTION);
+        setAnswered(false);
+    }, [shuffledQuestions, currentQIndex, questions]);
+
+    const onVideoFinished = useCallback(() => {
+        setShowVideo(false);
+        setCurrentVideoPlayback(null);
+        endGame(scoreRef.current);
+    }, []);
 
     const endGame = async (finalScore: number) => {
         setGameOver(true);
+        if (totalTimerRef.current) clearInterval(totalTimerRef.current);
+        if (questionTimerRef.current) clearInterval(questionTimerRef.current);
         setIsSaving(true);
         try {
             await updatePlayerScore(finalScore);
@@ -101,22 +206,24 @@ export default function TriviaGame() {
         }
     };
 
-    const startGame = () => {
-        setGameStarted(true);
-        setGameOver(false);
-        setScore(0);
-        setCurrentQIndex(0);
-        setTimeLeft(TIME_PER_QUESTION);
-    };
+    if (loading) {
+        return (
+            <View style={[styles.container, styles.centered]}>
+                <Stack.Screen options={{ headerShown: false }} />
+                <ActivityIndicator size="large" color={Colors.river.primary} />
+                <Text style={styles.loadingText}>Cargando trivia...</Text>
+            </View>
+        );
+    }
 
     if (!gameStarted) {
         return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <View style={[styles.container, styles.centered]}>
                 <Stack.Screen options={{ headerShown: false }} />
                 <View style={styles.card}>
                     <FontAwesome name="question-circle-o" size={80} color={Colors.river.primary} />
-                    <Text style={styles.introTitle}>¿CUÁNTO CONOCÉS A MEDINA?</Text>
-                    <Text style={styles.introText}>Contestá rápido para sumar más puntos.</Text>
+                    <Text style={styles.introTitle}>¿CUÁNTO SABÉS DE MEDINA EN 30 SEGUNDOS?</Text>
+                    <Text style={styles.introText}>Respondé rápido. Si fallás, mirá un video para seguir jugando.</Text>
                     <TouchableOpacity style={styles.playButton} onPress={startGame}>
                         <Text style={styles.playText}>JUGAR AHORA</Text>
                     </TouchableOpacity>
@@ -125,7 +232,35 @@ export default function TriviaGame() {
                     </TouchableOpacity>
                 </View>
             </View>
-        )
+        );
+    }
+
+    if (showVideo && currentVideoPlayback) {
+        const isYoutube = currentVideoPlayback.type === 'youtube';
+        return (
+            <View style={styles.container}>
+                <Stack.Screen options={{ headerShown: false }} />
+                <View style={styles.videoWrapper}>
+                    <Text style={styles.videoTitle}>Mirá el video para seguir jugando</Text>
+                    {isYoutube ? (
+                        <TriviaYouTubePlayer youtubeId={currentVideoPlayback.youtubeId} />
+                    ) : (
+                        <Video
+                            source={{ uri: currentVideoPlayback.url }}
+                            style={styles.video}
+                            useNativeControls
+                            shouldPlay
+                            onPlaybackStatusUpdate={(status) => {
+                                if (status.isLoaded && status.didJustFinishAndNotReset) onVideoFinished();
+                            }}
+                        />
+                    )}
+                    <TouchableOpacity style={styles.skipVideoBtn} onPress={onVideoFinished}>
+                        <Text style={styles.playText}>CONTINUAR</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
     }
 
     if (gameOver) {
@@ -136,7 +271,6 @@ export default function TriviaGame() {
                     <Text style={styles.introTitle}>RESULTADO</Text>
                     <Text style={styles.scoreBig}>{score}</Text>
                     <Text style={styles.introText}>Puntos</Text>
-
                     {isSaving ? (
                         <ActivityIndicator color={Colors.river.primary} size="large" />
                     ) : (
@@ -151,50 +285,52 @@ export default function TriviaGame() {
                     )}
                 </View>
             </View>
-        )
+        );
     }
 
-    const currentQ = QUESTIONS[currentQIndex];
+    if (!currentQ) {
+        return (
+            <View style={[styles.container, styles.centered]}>
+                <Text style={styles.introText}>No hay preguntas. Volvé al menú.</Text>
+                <TouchableOpacity onPress={() => router.back()}><Text style={{ color: Colors.river.primary }}>Volver</Text></TouchableOpacity>
+            </View>
+        );
+    }
 
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
-
-            {/* Top Bar */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()}>
                     <FontAwesome name="close" size={24} color="#333" />
                 </TouchableOpacity>
                 <Text style={styles.headerScore}>Puntos: {score}</Text>
                 <View style={styles.timerBadge}>
-                    <Text style={[styles.timerText, { color: timeLeft < 4 ? 'red' : 'black' }]}>{timeLeft}s</Text>
+                    <Text style={[styles.timerText, { color: totalTimeLeft < 6 ? 'red' : 'black' }]}>{totalTimeLeft}s</Text>
                 </View>
             </View>
-
-            {/* Progress */}
             <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${((currentQIndex + 1) / QUESTIONS.length) * 100}%` }]} />
+                <View style={[styles.progressFill, { width: `${(1 - totalTimeLeft / TOTAL_GAME_SECONDS) * 100}%` }]} />
             </View>
-
-            {/* Question Card */}
             <View style={styles.questionContainer}>
-                <Text style={styles.indexText}>Pregunta {currentQIndex + 1}/{QUESTIONS.length}</Text>
+                <Text style={styles.indexText}>Pregunta • {totalTimeLeft}s restantes</Text>
                 <Text style={styles.questionText}>{currentQ.question}</Text>
+                <View style={styles.questionTimer}>
+                    <Text style={[styles.timerText, { color: questionTimeLeft < 4 ? 'red' : '#333' }]}>{questionTimeLeft}s</Text>
+                </View>
             </View>
-
-            {/* Options */}
             <View style={styles.optionsContainer}>
-                {currentQ.options.map((opt, index) => (
+                {(displayOptions.options.length ? displayOptions.options : currentQ.options).map((opt, index) => (
                     <TouchableOpacity
                         key={index}
                         style={styles.optionButton}
                         onPress={() => handleAnswer(index)}
+                        disabled={answered}
                     >
                         <Text style={styles.optionText}>{opt}</Text>
                     </TouchableOpacity>
                 ))}
             </View>
-
         </View>
     );
 }
@@ -206,6 +342,8 @@ const styles = StyleSheet.create({
         paddingTop: 50,
         paddingHorizontal: 20
     },
+    centered: { justifyContent: 'center', alignItems: 'center' },
+    loadingText: { marginTop: 10, fontFamily: Fonts.sans, color: '#666' },
     card: {
         backgroundColor: 'white',
         padding: 40,
@@ -220,7 +358,7 @@ const styles = StyleSheet.create({
     },
     introTitle: {
         fontFamily: Fonts.bold,
-        fontSize: 24,
+        fontSize: 22,
         textAlign: 'center',
         marginVertical: 20,
         color: Colors.river.primary
@@ -284,7 +422,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.river.primary
     },
     questionContainer: {
-        marginBottom: 40
+        marginBottom: 24
     },
     indexText: {
         color: '#888',
@@ -296,6 +434,10 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.bold,
         color: '#222',
         lineHeight: 34
+    },
+    questionTimer: {
+        marginTop: 12,
+        alignItems: 'center'
     },
     optionsContainer: {
         gap: 15
@@ -316,5 +458,30 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.sans,
         fontSize: 18,
         color: '#333'
+    },
+    videoWrapper: {
+        flex: 1,
+        padding: 20,
+        alignItems: 'center'
+    },
+    videoTitle: {
+        fontFamily: Fonts.bold,
+        fontSize: 18,
+        color: '#333',
+        marginBottom: 16
+    },
+    video: {
+        width: '100%',
+        aspectRatio: 16 / 9,
+        backgroundColor: '#000',
+        borderRadius: 12,
+        overflow: 'hidden'
+    },
+    skipVideoBtn: {
+        marginTop: 24,
+        backgroundColor: Colors.river.primary,
+        paddingVertical: 14,
+        paddingHorizontal: 32,
+        borderRadius: 10
     }
 });

@@ -1,3 +1,4 @@
+import { File as ExpoFile } from 'expo-file-system';
 import {
     addDoc, collection,
     deleteDoc,
@@ -87,6 +88,27 @@ export interface MediaMetadata {
 export interface AppConfig {
     id: string; // The config key, e.g., 'branding'
     value: any;
+}
+
+// Trivia
+export interface TriviaQuestion {
+    id?: string;
+    question: string;
+    options: string[]; // 4 options
+    correctIndex: number; // 0-3
+    order: number;
+    timestamp?: any;
+}
+
+export interface TriviaVideo {
+    id?: string;
+    /** YouTube video ID (recomendado: estable, sin límites de uso). */
+    youtubeId?: string;
+    /** Google Drive file ID (legacy; si hay youtubeId se usa ese). */
+    driveFileId?: string;
+    name?: string;
+    order: number;
+    timestamp?: any;
 }
 
 // 1. Leaderboard / Scores (Cumulative)
@@ -356,10 +378,15 @@ export const uploadMediaFile = async (uri: string, path: string): Promise<string
         let blob: Blob;
         if (Platform.OS === 'web') {
             const response = await fetch(uri);
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             blob = await response.blob();
+        } else if (uri.startsWith('file://')) {
+            // En iOS/Android fetch(file://) suele fallar; usar expo-file-system (File implementa Blob)
+            const file = new ExpoFile(uri);
+            blob = file as unknown as Blob;
         } else {
-            // For native, we still fetch the local URI to get a blob
             const response = await fetch(uri);
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             blob = await response.blob();
         }
 
@@ -388,3 +415,98 @@ export const savePushToken = async (token: string) => {
         console.error("Error saving push token", e);
     }
 };
+
+// 10. Trivia Questions
+export const addTriviaQuestion = async (q: Omit<TriviaQuestion, 'id' | 'timestamp'>) => {
+    try {
+        await addDoc(collection(db, 'trivia_questions'), sanitize({
+            ...q,
+            timestamp: new Date()
+        }));
+    } catch (e) {
+        console.error("Error adding trivia question", e);
+        throw e;
+    }
+};
+
+export const updateTriviaQuestion = async (id: string, updates: Partial<TriviaQuestion>) => {
+    try {
+        await updateDoc(doc(db, 'trivia_questions', id), sanitize(updates));
+    } catch (e) {
+        console.error("Error updating trivia question", e);
+    }
+};
+
+export const deleteTriviaQuestion = async (id: string) => {
+    try {
+        await deleteDoc(doc(db, 'trivia_questions', id));
+    } catch (e) {
+        console.error("Error deleting trivia question", e);
+    }
+};
+
+export const subscribeToTriviaQuestions = (callback: (questions: TriviaQuestion[]) => void) => {
+    const q = query(collection(db, 'trivia_questions'), orderBy('order', 'asc'));
+    return onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TriviaQuestion));
+        callback(items);
+    });
+};
+
+export const getTriviaQuestionsOnce = async (): Promise<TriviaQuestion[]> => {
+    const q = query(collection(db, 'trivia_questions'), orderBy('order', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TriviaQuestion));
+};
+
+// 11. Trivia Videos (Google Drive references)
+export const addTriviaVideo = async (v: Omit<TriviaVideo, 'id' | 'timestamp'>) => {
+    try {
+        await addDoc(collection(db, 'trivia_videos'), sanitize({
+            ...v,
+            timestamp: new Date()
+        }));
+    } catch (e) {
+        console.error("Error adding trivia video", e);
+        throw e;
+    }
+};
+
+export const updateTriviaVideo = async (id: string, updates: Partial<TriviaVideo>) => {
+    try {
+        await updateDoc(doc(db, 'trivia_videos', id), sanitize(updates));
+    } catch (e) {
+        console.error("Error updating trivia video", e);
+    }
+};
+
+export const deleteTriviaVideo = async (id: string) => {
+    try {
+        await deleteDoc(doc(db, 'trivia_videos', id));
+    } catch (e) {
+        console.error("Error deleting trivia video", e);
+    }
+};
+
+export const subscribeToTriviaVideos = (callback: (videos: TriviaVideo[]) => void) => {
+    const q = query(collection(db, 'trivia_videos'), orderBy('order', 'asc'));
+    return onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TriviaVideo));
+        callback(items);
+    });
+};
+
+export const getTriviaVideosOnce = async (): Promise<TriviaVideo[]> => {
+    const q = query(collection(db, 'trivia_videos'), orderBy('order', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TriviaVideo));
+};
+
+/** Prefer YouTube; fallback Drive. Returns { type, youtubeId? } or { type, url? } for playback. */
+export function getTriviaVideoPlayback(v: TriviaVideo): { type: 'youtube'; youtubeId: string } | { type: 'drive'; url: string } | null {
+    const id = (v.youtubeId || '').trim();
+    if (id) return { type: 'youtube', youtubeId: id };
+    const driveId = (v.driveFileId || '').trim();
+    if (driveId && driveId !== 'REEMPLAZAR') return { type: 'drive', url: `https://drive.google.com/uc?export=download&id=${driveId}` };
+    return null;
+}

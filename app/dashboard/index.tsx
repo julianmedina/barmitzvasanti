@@ -3,7 +3,7 @@ import { NewsAlert, subscribeToConfigs, subscribeToLeaderboard, subscribeToMedia
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Animated, Image, LayoutAnimation, Platform, StyleSheet, Text, UIManager, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, LayoutAnimation, Platform, StyleSheet, Text, UIManager, useWindowDimensions, View } from 'react-native';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -130,13 +130,6 @@ export default function DashboardScreen() {
 
     const activeAlert = liveNews[currentAlert] || { type: 'INFO', text: configs.branding || 'EL BAR MITZVA DE MEDINA' };
 
-    // Live Clock State
-    const [time, setTime] = useState(new Date());
-    useEffect(() => {
-        const timer = setInterval(() => setTime(new Date()), 1000);
-        return () => clearInterval(timer);
-    }, []);
-
     // ANIMATION FOR TICKER
     const scrollAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -162,23 +155,31 @@ export default function DashboardScreen() {
     const startIdx = leaderboardPage * ITEMS_PER_PAGE;
     const currentLeaderboard = leaderboard.slice(startIdx, startIdx + ITEMS_PER_PAGE);
 
-    // Derived Stats
-    const totalPoints = leaderboard.reduce((acc, curr) => acc + curr.points, 0);
-    const totalPlayers = leaderboard.length;
-    const totalPhotos = livePhotos.length;
-    const totalMessages = liveMessages.length;
+    // Escala para que todo quepa en la ventana (referencia 1920x1080 proyector)
+    const { width: winWidth, height: winHeight } = useWindowDimensions();
+    const scale = Math.min(winWidth / 1920, winHeight / 1080);
 
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
+            <View style={[styles.viewportWrap, { width: 1920 * scale, height: 1080 * scale }]}>
+                <View
+                    style={[
+                        styles.fixedCanvas,
+                        {
+                            transform: [{ scale }],
+                            // @ts-ignore - web
+                            transformOrigin: 'top left',
+                        },
+                    ]}
+                >
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={styles.brandingTitle}>{configs.branding || 'SANTI MEDINA'}</Text>
+                        <View style={styles.headerDivider} />
+                    </View>
 
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={styles.brandingTitle}>{configs.branding || 'SANTI MEDINA'}</Text>
-                <View style={styles.headerDivider} />
-            </View>
-
-            <View style={styles.mainContent}>
+                    <View style={styles.mainContent}>
 
                 {/* 1. Left: Leaderboard (Live & Paged) */}
                 <View style={styles.leaderboardContainer}>
@@ -239,15 +240,14 @@ export default function DashboardScreen() {
                 </View>
 
 
-                {/* 3. Right: QR + Social Wall */}
+                {/* 3. Right: QR + Social Wall (Santi no es Santi) */}
                 <View style={styles.rightSidebar}>
-
                     <View style={styles.qrSection}>
                         <Text style={styles.qrTitle}>{configs.branding || 'SANTI MEDINA'}</Text>
                         <Text style={[styles.qrTitle, { fontSize: 18, marginTop: -15, color: 'rgba(0,0,0,0.6)' }]}>EXPERIENCIA INTERACTIVA</Text>
                         <View style={styles.qrBox}>
                             <Image
-                                source={{ uri: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://bar-mitzva-medina.vercel.app' }}
+                                source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent('https://santiagomedina.com.ar/')}` }}
                                 style={styles.qrImage}
                             />
                         </View>
@@ -267,56 +267,37 @@ export default function DashboardScreen() {
                         </View>
                         <View style={styles.socialGlow} />
                     </View>
+                </View>
 
-                    <View style={styles.statsCard}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statVal}>{totalPhotos}</Text>
-                            <Text style={styles.statLab}>FOTOS</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statVal}>{totalPlayers}</Text>
-                            <Text style={styles.statLab}>PLAYERS</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statVal}>{totalMessages}</Text>
-                            <Text style={styles.statLab}>IDEAS</Text>
-                        </View>
                     </View>
 
-                </View>
-
-            </View>
-
-            {/* Footer: TV Style Zocalo */}
-            <View style={styles.zocalo}>
-                <View style={[
-                    styles.zocaloBrand,
-                    activeAlert.type === 'URGENTE' && { backgroundColor: '#FF0000' },
-                    activeAlert.type === 'ULTIMO MOMENTO' && { backgroundColor: '#FF8800' },
-                    activeAlert.type === 'ALERTA' && { backgroundColor: Colors.elegant.gold }
-                ]}>
-                    <Text style={[
-                        styles.zocaloBrandText,
-                        activeAlert.type === 'ALERTA' && { color: 'black' }
-                    ]}>
-                        {activeAlert.type}
-                    </Text>
-                    {activeAlert.type === 'URGENTE' && <View style={styles.liveDot} />}
-                </View>
-                <View style={styles.zocaloContent}>
-                    <Animated.View style={{
-                        transform: [{ translateX: scrollAnim }],
-                        flexDirection: 'row',
-                    }}>
-                        <Text style={styles.tickerText} numberOfLines={1}>
-                            {activeAlert.text.toUpperCase()} • {activeAlert.text.toUpperCase()} • {activeAlert.text.toUpperCase()}
-                        </Text>
-                    </Animated.View>
-                </View>
-                <View style={styles.zocaloTime}>
-                    <Text style={styles.timeText}>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                    {/* Footer: TV Style Zocalo */}
+                    <View style={styles.zocalo}>
+                        <View style={[
+                            styles.zocaloBrand,
+                            activeAlert.type === 'URGENTE' && { backgroundColor: '#FF0000' },
+                            activeAlert.type === 'ULTIMO MOMENTO' && { backgroundColor: '#FF8800' },
+                            activeAlert.type === 'ALERTA' && { backgroundColor: Colors.elegant.gold }
+                        ]}>
+                            <Text style={[
+                                styles.zocaloBrandText,
+                                activeAlert.type === 'ALERTA' && { color: 'black' }
+                            ]}>
+                                {activeAlert.type}
+                            </Text>
+                            {activeAlert.type === 'URGENTE' && <View style={styles.liveDot} />}
+                        </View>
+                        <View style={styles.zocaloContent}>
+                            <Animated.View style={{
+                                transform: [{ translateX: scrollAnim }],
+                                flexDirection: 'row',
+                            }}>
+                                <Text style={styles.tickerText} numberOfLines={1}>
+                                    {activeAlert.text} • {activeAlert.text} • {activeAlert.text}
+                                </Text>
+                            </Animated.View>
+                        </View>
+                    </View>
                 </View>
             </View>
         </View>
@@ -327,77 +308,92 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: 'black',
-        padding: 30,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    viewportWrap: {
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    fixedCanvas: {
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: 1920,
+        height: 1080,
+        backgroundColor: 'black',
+        padding: 24,
         paddingBottom: 0,
     },
     header: {
         alignItems: 'center',
-        marginBottom: 20,
+        marginBottom: 12,
     },
     brandingTitle: {
         fontFamily: Fonts.bold,
-        fontSize: 56, // Increased
+        fontSize: 42,
         color: Colors.elegant.gold,
-        letterSpacing: 12,
+        letterSpacing: 8,
         textShadowColor: 'rgba(212, 175, 55, 0.5)',
-        textShadowOffset: { width: 0, height: 4 },
-        textShadowRadius: 15,
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 10,
     },
     headerDivider: {
-        width: 100,
-        height: 4,
+        width: 80,
+        height: 3,
         backgroundColor: Colors.elegant.gold,
-        marginTop: 10,
+        marginTop: 6,
         borderRadius: 2,
     },
     mainContent: {
         flex: 1,
         flexDirection: 'row',
-        gap: 25,
-        marginBottom: 80,
+        gap: 20,
+        marginBottom: 24,
+        minHeight: 0,
     },
     leaderboardContainer: {
-        width: 480, // Increased
+        width: 380,
         backgroundColor: 'rgba(26, 26, 26, 0.95)',
-        borderRadius: 30,
-        padding: 30,
+        borderRadius: 20,
+        padding: 20,
         borderWidth: 2,
         borderColor: '#444',
         shadowColor: Colors.elegant.gold,
         shadowOpacity: 0.2,
-        shadowRadius: 30,
+        shadowRadius: 20,
     },
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        marginBottom: 20,
+        gap: 8,
+        marginBottom: 12,
         borderBottomWidth: 1,
         borderBottomColor: '#444',
-        paddingBottom: 10,
+        paddingBottom: 8,
     },
     sectionTitle: {
         color: 'white',
         fontFamily: Fonts.bold,
-        fontSize: 24, // Increased
+        fontSize: 18,
         flex: 1,
     },
     pageIndicator: {
         backgroundColor: '#333',
-        paddingHorizontal: 12,
+        paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 8,
+        borderRadius: 6,
     },
     pageLabel: {
         color: Colors.elegant.gold,
-        fontSize: 16, // Increased
+        fontSize: 14,
         fontFamily: Fonts.bold,
     },
     emptyLead: {
         color: '#666',
         textAlign: 'center',
-        marginTop: 60,
-        fontSize: 20,
+        marginTop: 24,
+        fontSize: 16,
         fontStyle: 'italic'
     },
     rankList: {
@@ -408,9 +404,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#1a1a1a',
-        padding: 12,
-        borderRadius: 12,
-        marginBottom: 10,
+        padding: 8,
+        borderRadius: 10,
+        marginBottom: 6,
         borderWidth: 1,
         borderColor: '#333',
     },
@@ -427,48 +423,49 @@ const styles = StyleSheet.create({
     rankNum: {
         color: '#888',
         fontFamily: Fonts.bold,
-        fontSize: 22, // Increased
-        width: 45,
+        fontSize: 16,
+        width: 36,
     },
     miniAvatar: {
-        width: 44, // Increased
-        height: 44,
-        borderRadius: 22,
-        marginRight: 15,
-        borderWidth: 2,
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        marginRight: 10,
+        borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.2)',
     },
     rankName: {
         flex: 1,
         color: 'white',
         fontFamily: Fonts.sans,
-        fontSize: 24, // Increased
+        fontSize: 18,
     },
     rankRight: {
         backgroundColor: '#222',
-        paddingHorizontal: 12,
+        paddingHorizontal: 10,
         paddingVertical: 4,
-        borderRadius: 8,
+        borderRadius: 6,
     },
     rankPts: {
         color: Colors.elegant.gold,
         fontFamily: Fonts.bold,
-        fontSize: 24, // Increased
+        fontSize: 18,
     },
     moreIndicator: {
         alignItems: 'center',
-        paddingTop: 15,
+        paddingTop: 8,
     },
     moreText: {
         color: '#555',
-        fontSize: 12,
+        fontSize: 11,
         fontFamily: Fonts.bold,
-        letterSpacing: 2,
+        letterSpacing: 1,
     },
     centralPanel: {
         flex: 1,
+        minWidth: 0,
         backgroundColor: '#111',
-        borderRadius: 20,
+        borderRadius: 16,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: '#333',
@@ -502,13 +499,13 @@ const styles = StyleSheet.create({
         letterSpacing: 2,
     },
     rightSidebar: {
-        width: 420, // Increased
-        gap: 30,
+        width: 340,
+        gap: 16,
     },
     qrSection: {
         backgroundColor: Colors.elegant.gold,
-        padding: 30,
-        borderRadius: 24,
+        padding: 16,
+        borderRadius: 16,
         alignItems: 'center',
         borderWidth: 2,
         borderColor: 'white',
@@ -516,23 +513,23 @@ const styles = StyleSheet.create({
     },
     qrTitle: {
         fontFamily: Fonts.bold,
-        fontSize: 28, // Increased
+        fontSize: 20,
         color: 'black',
-        marginBottom: 15,
+        marginBottom: 8,
         textAlign: 'center',
     },
     qrBox: {
         backgroundColor: 'white',
-        padding: 15,
-        borderRadius: 15,
-        marginBottom: 15,
+        padding: 10,
+        borderRadius: 12,
+        marginBottom: 10,
         shadowColor: 'black',
         shadowOpacity: 0.2,
-        shadowRadius: 10,
+        shadowRadius: 8,
     },
     qrImage: {
-        width: 180, // Increased
-        height: 180,
+        width: 120,
+        height: 120,
     },
     qrArrowContainer: {
         flexDirection: 'row',
@@ -541,14 +538,15 @@ const styles = StyleSheet.create({
     },
     qrFooter: {
         fontFamily: Fonts.bold,
-        fontSize: 18, // Increased
+        fontSize: 14,
         color: 'black',
     },
     socialCard: {
         flex: 1,
+        minHeight: 0,
         backgroundColor: '#1a1a1a',
-        borderRadius: 20,
-        padding: 25,
+        borderRadius: 16,
+        padding: 16,
         borderWidth: 1,
         borderColor: Colors.river.primary,
         shadowColor: Colors.river.primary,
@@ -557,112 +555,74 @@ const styles = StyleSheet.create({
     socialHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        marginBottom: 20,
+        gap: 10,
+        marginBottom: 12,
     },
     socialTitle: {
         color: Colors.river.primary,
         fontFamily: Fonts.bold,
-        fontSize: 22, // Increased
+        fontSize: 16,
         textAlign: 'center',
     },
     messageBox: {
         flex: 1,
         justifyContent: 'center',
+        minHeight: 0,
     },
     socialMessage: {
         color: 'white',
         fontFamily: Fonts.bold,
-        fontSize: 42, // Significantly Increased
+        fontSize: 28,
         textAlign: 'center',
         fontStyle: 'italic',
-        lineHeight: 52,
+        lineHeight: 36,
         textShadowColor: 'rgba(228, 0, 43, 0.4)',
-        textShadowOffset: { width: 0, height: 4 },
-        textShadowRadius: 10,
+        textShadowOffset: { width: 0, height: 2 },
+        textShadowRadius: 8,
     },
     zocalo: {
         position: 'absolute',
-        bottom: 20,
-        left: 30,
-        right: 30,
-        height: 60,
+        bottom: 12,
+        left: 24,
+        right: 24,
+        height: 48,
         flexDirection: 'row',
         backgroundColor: '#1E1E1E',
-        borderRadius: 15,
+        borderRadius: 12,
         overflow: 'hidden',
         borderWidth: 1,
         borderColor: '#444',
     },
     zocaloBrand: {
         backgroundColor: Colors.river.primary,
-        width: 180,
+        width: 140,
         justifyContent: 'center',
         alignItems: 'center',
         flexDirection: 'row',
-        gap: 10,
+        gap: 8,
     },
     zocaloBrandText: {
         color: 'white',
         fontFamily: Fonts.bold,
-        fontSize: 16,
+        fontSize: 14,
     },
     liveDot: {
-        width: 12,
-        height: 12,
+        width: 10,
+        height: 10,
         backgroundColor: 'white',
-        borderRadius: 6,
+        borderRadius: 5,
     },
     zocaloContent: {
         flex: 1,
         justifyContent: 'center',
-        paddingHorizontal: 25,
-        overflow: 'hidden', // Crucial for marquee
+        paddingHorizontal: 16,
+        overflow: 'hidden',
     },
     tickerText: {
         color: 'white',
-        fontFamily: Fonts.bold, // Stronger
-        fontSize: 32,
-        minWidth: 4000, // Even wider for repetition
-    },
-    zocaloTime: {
-        backgroundColor: '#333',
-        paddingHorizontal: 40,
-        justifyContent: 'center',
-    },
-    timeText: {
-        color: Colors.elegant.gold,
         fontFamily: Fonts.bold,
-        fontSize: 32,
-    },
-    statsCard: {
-        flexDirection: 'row',
-        backgroundColor: '#111',
-        borderRadius: 20,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: '#333',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-    },
-    statItem: {
-        alignItems: 'center',
-    },
-    statVal: {
-        color: 'white',
-        fontSize: 28,
-        fontFamily: Fonts.bold,
-    },
-    statLab: {
-        color: Colors.elegant.gold,
-        fontSize: 12,
-        fontFamily: Fonts.bold,
-        marginTop: 4,
-    },
-    statDivider: {
-        width: 1,
-        height: 30,
-        backgroundColor: '#333',
+        fontSize: 18,
+        minWidth: 4000,
     },
     socialGlow: {
         position: 'absolute',

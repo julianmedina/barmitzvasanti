@@ -4,14 +4,20 @@ import {
     MediaMetadata,
     NewsAlert,
     SocialMessage,
+    TriviaQuestion,
+    TriviaVideo,
     UserProfile,
     addHomenaje,
     addNews,
+    addTriviaQuestion,
+    addTriviaVideo,
     auth,
     deleteHomenaje,
     deleteMedia,
     deleteMessage,
     deleteNews,
+    deleteTriviaQuestion,
+    deleteTriviaVideo,
     resetRanking,
     saveConfig,
     subscribeToAllProfiles,
@@ -20,9 +26,13 @@ import {
     subscribeToMedia,
     subscribeToMessages,
     subscribeToNews,
+    subscribeToTriviaQuestions,
+    subscribeToTriviaVideos,
     updateHomenaje,
     updateMessage,
-    updateNews
+    updateNews,
+    updateTriviaQuestion,
+    updateTriviaVideo
 } from '@/services/database';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack, useRouter } from 'expo-router';
@@ -30,7 +40,25 @@ import { signInAnonymously } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-type AdminView = 'MENU' | 'CONFIG' | 'NEWS' | 'HOMENAJES' | 'MESSAGES' | 'PROFILES' | 'MEDIA' | 'DANGER';
+type AdminView = 'MENU' | 'CONFIG' | 'NEWS' | 'HOMENAJES' | 'MESSAGES' | 'PROFILES' | 'MEDIA' | 'TRIVIA' | 'DANGER';
+
+const TRIVIA_SEED_QUESTIONS: Omit<TriviaQuestion, 'id' | 'timestamp'>[] = [
+    { question: '¿De qué cuadro es Medina?', options: ['Boca', 'River', 'Atlanta', 'Racing'], correctIndex: 1, order: 0 },
+    { question: '¿Cuál es su comida favorita?', options: ['Sushi', 'Asado', 'Milanesa con Puré', 'Fideos con Tuco'], correctIndex: 2, order: 1 },
+    { question: '¿En qué posición juega al fútbol?', options: ['Arquero', 'Defensor', 'Mediocampista', 'Delantero'], correctIndex: 1, order: 2 },
+    { question: '¿Cuál es su materia preferida en el colegio?', options: ['Matemática', 'Gimnasia', 'Historia', 'Recreo'], correctIndex: 3, order: 3 },
+];
+
+const TRIVIA_SEED_VIDEOS: { name: string; order: number; youtubeId?: string }[] = [
+    { name: 'Short 1', order: 0, youtubeId: 'WjMbH6RSMFc' },
+    { name: 'Short 2', order: 1, youtubeId: '-KbKlrb3sn0' },
+    { name: 'Short 3', order: 2, youtubeId: '9LsTK-rp8wE' },
+    { name: 'Short 4', order: 3, youtubeId: 'B72ihL1LKrk' },
+    { name: 'Short 5', order: 4, youtubeId: 'vovAE0FrAh4' },
+    { name: 'Short 6', order: 5, youtubeId: '-bRLWfznUPs' },
+    { name: 'Short 7', order: 6, youtubeId: 'TIVlHFpoLsk' },
+    { name: 'Short 8', order: 7, youtubeId: '0E5ouMxqfEA' },
+];
 
 export default function AdminPanel() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -45,6 +73,8 @@ export default function AdminPanel() {
     const [mediaList, setMediaList] = useState<MediaMetadata[]>([]);
     const [messagesList, setMessagesList] = useState<SocialMessage[]>([]);
     const [configs, setConfigs] = useState<Record<string, any>>({});
+    const [triviaQuestions, setTriviaQuestions] = useState<TriviaQuestion[]>([]);
+    const [triviaVideos, setTriviaVideos] = useState<TriviaVideo[]>([]);
 
     // Forms State
     const [newsText, setNewsText] = useState('');
@@ -59,6 +89,23 @@ export default function AdminPanel() {
     const [configWelcome, setConfigWelcome] = useState('');
     const [configSocialTitle, setConfigSocialTitle] = useState('');
     const [configLandingSub, setConfigLandingSub] = useState('');
+    const [triviaSubView, setTriviaSubView] = useState<'questions' | 'videos'>('questions');
+    const [triviaQuestion, setTriviaQuestion] = useState('');
+    const [triviaOpt1, setTriviaOpt1] = useState('');
+    const [triviaOpt2, setTriviaOpt2] = useState('');
+    const [triviaOpt3, setTriviaOpt3] = useState('');
+    const [triviaOpt4, setTriviaOpt4] = useState('');
+    const [triviaCorrect, setTriviaCorrect] = useState(0);
+    const [triviaOrder, setTriviaOrder] = useState('');
+    const [triviaVideoName, setTriviaVideoName] = useState('');
+    const [triviaVideoId, setTriviaVideoId] = useState('');
+    const [triviaVideoOrder, setTriviaVideoOrder] = useState('');
+    const [editingVideo, setEditingVideo] = useState<TriviaVideo | null>(null);
+    const [editingVideoYoutubeId, setEditingVideoYoutubeId] = useState('');
+    const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+    const [seedMessage, setSeedMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+    const [editingQuestion, setEditingQuestion] = useState<TriviaQuestion | null>(null);
+    const [confirmDeleteAllTrivia, setConfirmDeleteAllTrivia] = useState(false);
 
     const router = useRouter();
     const ADMIN_PIN = "2026";
@@ -85,8 +132,10 @@ export default function AdminPanel() {
                 if (data.social_title) setConfigSocialTitle(data.social_title);
                 if (data.landing_subtitle) setConfigLandingSub(data.landing_subtitle);
             });
+            const unsubTq = subscribeToTriviaQuestions(setTriviaQuestions);
+            const unsubTv = subscribeToTriviaVideos(setTriviaVideos);
             return () => {
-                unsubNews(); unsubHom(); unsubProfiles(); unsubMedia(); unsubMessages(); unsubConfigs();
+                unsubNews(); unsubHom(); unsubProfiles(); unsubMedia(); unsubMessages(); unsubConfigs(); unsubTq(); unsubTv();
             };
         }
     }, [isAuthenticated]);
@@ -165,6 +214,212 @@ export default function AdminPanel() {
         Alert.alert("Confirmar", "¿Borrar esta foto?", [{ text: "No" }, { text: "Sí", onPress: () => deleteMedia(id) }]);
     };
 
+    function extractDriveFileId(input: string): string | null {
+        const t = input.trim();
+        const m1 = t.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (m1) return m1[1];
+        const m2 = t.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        if (m2) return m2[1];
+        if (/^[a-zA-Z0-9_-]{20,}$/.test(t)) return t;
+        return null;
+    }
+
+    function extractYoutubeId(input: string): string | null {
+        const t = input.trim();
+        const m1 = t.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+        if (m1) return m1[1];
+        if (/^[a-zA-Z0-9_-]{11}$/.test(t)) return t;
+        return null;
+    }
+
+    const handleAddTriviaQuestion = async () => {
+        const opts = [triviaOpt1.trim(), triviaOpt2.trim(), triviaOpt3.trim(), triviaOpt4.trim()];
+        if (!triviaQuestion.trim() || opts.some(o => !o)) {
+            Alert.alert("Error", "Completá pregunta y las 4 opciones.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await addTriviaQuestion({
+                question: triviaQuestion.trim(),
+                options: opts,
+                correctIndex: triviaCorrect,
+                order: parseInt(triviaOrder, 10) || triviaQuestions.length
+            });
+            setTriviaQuestion(''); setTriviaOpt1(''); setTriviaOpt2(''); setTriviaOpt3(''); setTriviaOpt4(''); setTriviaOrder('');
+            Alert.alert("Éxito", "Pregunta agregada");
+        } catch (e: any) {
+            const msg = e?.message || (e?.code === 'permission-denied' ? 'Sin permiso. Desplegá las reglas de Firestore (firebase deploy --only firestore:rules).' : 'No se pudo agregar');
+            Alert.alert("Error", msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteTriviaQuestion = (id: string) => {
+        Alert.alert("Confirmar", "¿Borrar esta pregunta?", [{ text: "No" }, { text: "Sí", onPress: () => deleteTriviaQuestion(id) }]);
+    };
+
+    const handleAddTriviaVideo = async () => {
+        const youtubeId = extractYoutubeId(triviaVideoId);
+        const driveFileId = extractDriveFileId(triviaVideoId);
+        if (!youtubeId && !driveFileId) {
+            Alert.alert("Error", "Pegá un enlace de YouTube (recomendado) o de Google Drive.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await addTriviaVideo({
+                ...(youtubeId && { youtubeId }),
+                ...(driveFileId && { driveFileId }),
+                name: triviaVideoName.trim() || undefined,
+                order: parseInt(triviaVideoOrder, 10) || triviaVideos.length
+            });
+            setTriviaVideoName(''); setTriviaVideoId(''); setTriviaVideoOrder('');
+            Alert.alert("Éxito", youtubeId ? "Video de YouTube agregado." : "Referencia a Drive agregada.");
+        } catch (e: any) {
+            const msg = e?.message || (e?.code === 'permission-denied' ? 'Sin permiso. Desplegá las reglas de Firestore.' : 'No se pudo agregar');
+            Alert.alert("Error", msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDeleteTriviaVideo = (id: string) => {
+        setDeletingVideoId(id);
+    };
+
+    const confirmDeleteTriviaVideo = async () => {
+        if (!deletingVideoId) return;
+        setIsLoading(true);
+        try {
+            await deleteTriviaVideo(deletingVideoId);
+            setDeletingVideoId(null);
+        } catch (e: any) {
+            Alert.alert("Error", e?.message || "No se pudo borrar");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSaveEditVideo = async () => {
+        if (!editingVideo?.id) return;
+        const youtubeId = extractYoutubeId(editingVideoYoutubeId);
+        if (!youtubeId) {
+            Alert.alert("Error", "Pegá un enlace de YouTube o el ID del video (11 caracteres).");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await updateTriviaVideo(editingVideo.id, { youtubeId });
+            setEditingVideo(null);
+            setEditingVideoYoutubeId('');
+            Alert.alert("Listo", "Video de YouTube actualizado.");
+        } catch (e: any) {
+            Alert.alert("Error", e?.message || "No se pudo actualizar");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleEditQuestion = (q: TriviaQuestion) => {
+        setEditingQuestion(q);
+        setTriviaQuestion(q.question);
+        setTriviaOpt1(q.options[0] ?? '');
+        setTriviaOpt2(q.options[1] ?? '');
+        setTriviaOpt3(q.options[2] ?? '');
+        setTriviaOpt4(q.options[3] ?? '');
+        setTriviaCorrect(q.correctIndex);
+        setTriviaOrder(String(q.order ?? 0));
+    };
+
+    const handleSaveEditQuestion = async () => {
+        if (!editingQuestion?.id) return;
+        const opts = [triviaOpt1.trim(), triviaOpt2.trim(), triviaOpt3.trim(), triviaOpt4.trim()];
+        if (!triviaQuestion.trim() || opts.some(o => !o)) {
+            Alert.alert("Error", "Completá pregunta y las 4 opciones.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await updateTriviaQuestion(editingQuestion.id, {
+                question: triviaQuestion.trim(),
+                options: opts,
+                correctIndex: triviaCorrect,
+                order: parseInt(triviaOrder, 10) || 0
+            });
+            setEditingQuestion(null);
+            setTriviaQuestion(''); setTriviaOpt1(''); setTriviaOpt2(''); setTriviaOpt3(''); setTriviaOpt4(''); setTriviaOrder('');
+            Alert.alert("Listo", "Pregunta actualizada.");
+        } catch (e: any) {
+            Alert.alert("Error", e?.message || "No se pudo actualizar");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleLoadTriviaSeed = async () => {
+        if (triviaQuestions.length > 0 || triviaVideos.length > 0) {
+            Alert.alert("Aviso", "Ya hay preguntas o videos. ¿Cargar igual? (se duplicarán)", [
+                { text: "Cancelar" },
+                { text: "Sí, cargar", onPress: doLoadTriviaSeed }
+            ]);
+            return;
+        }
+        await doLoadTriviaSeed();
+    };
+
+    const doDeleteAllTrivia = async () => {
+        setConfirmDeleteAllTrivia(false);
+        setSeedMessage(null);
+        setIsLoading(true);
+        try {
+            for (const q of triviaQuestions) {
+                if (q.id) await deleteTriviaQuestion(q.id);
+            }
+            for (const v of triviaVideos) {
+                if (v.id) await deleteTriviaVideo(v.id);
+            }
+            setSeedMessage({ type: 'ok', text: 'Trivia borrada. Podés cargar datos iniciales.' });
+        } catch (e: any) {
+            const msg = e?.message || (e?.code === 'permission-denied' ? 'Sin permiso.' : 'Error al borrar.');
+            setSeedMessage({ type: 'error', text: msg });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const doLoadTriviaSeed = async () => {
+        setSeedMessage(null);
+        setIsLoading(true);
+        try {
+            for (let i = 0; i < TRIVIA_SEED_QUESTIONS.length; i++) {
+                await addTriviaQuestion({ ...TRIVIA_SEED_QUESTIONS[i], order: i });
+            }
+            for (let i = 0; i < TRIVIA_SEED_VIDEOS.length; i++) {
+                await addTriviaVideo({
+                    name: TRIVIA_SEED_VIDEOS[i].name,
+                    youtubeId: TRIVIA_SEED_VIDEOS[i].youtubeId,
+                    order: TRIVIA_SEED_VIDEOS[i].order
+                });
+            }
+            const msg = "Se cargaron 4 preguntas y 8 YouTube Shorts para la trivia.";
+            setSeedMessage({ type: 'ok', text: msg });
+            Alert.alert("Listo", msg);
+        } catch (e: any) {
+            const errMsg = e?.message || e?.code || String(e);
+            const isPermission = e?.code === 'permission-denied' || errMsg.includes('permission');
+            const text = isPermission
+                ? "Sin permiso. Desplegá reglas: firebase deploy --only firestore:rules y revisá que estés en la base 'barmitzvamedina'."
+                : `Error: ${errMsg}`;
+            setSeedMessage({ type: 'error', text });
+            console.error("Trivia seed error:", e);
+            Alert.alert("Error", text);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     if (!isAuthenticated) {
         return (
             <View style={styles.container}>
@@ -188,6 +443,7 @@ export default function AdminPanel() {
                 { id: 'MESSAGES', label: 'Mensajes Sociales', icon: 'comments' },
                 { id: 'PROFILES', label: 'Invitados/Perfiles', icon: 'users' },
                 { id: 'MEDIA', label: 'Fotos Subidas', icon: 'image' },
+                { id: 'TRIVIA', label: 'Trivia Medina', icon: 'question-circle' },
                 { id: 'DANGER', label: 'Zona Peligrosa', icon: 'warning' },
             ].map((item) => (
                 <TouchableOpacity key={item.id} style={styles.menuItem} onPress={() => setCurrentView(item.id as AdminView)}>
@@ -354,6 +610,149 @@ export default function AdminPanel() {
                                 </View>
                             ))}
                         </View>
+                    </View>
+                )}
+
+                {currentView === 'TRIVIA' && (
+                    <View style={styles.section}>
+                        {renderHeader('TRIVIA MEDINA')}
+                        <View style={[styles.listItem, { backgroundColor: '#222', marginBottom: 12 }]}>
+                            <Text style={{ color: Colors.elegant.gold, fontWeight: 'bold' }}>
+                                Cargado: {triviaQuestions.length} preguntas, {triviaVideos.length} videos
+                            </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                            <TouchableOpacity style={[styles.addBtn, { backgroundColor: Colors.elegant.gold, flex: 1, minWidth: 180 }]} onPress={handleLoadTriviaSeed} disabled={isLoading}>
+                                <Text style={[styles.addBtnText, { color: '#000' }]}>CARGAR DATOS INICIALES (4 preguntas + 8 Shorts)</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#8b0000', flex: 1, minWidth: 140 }]} onPress={() => setConfirmDeleteAllTrivia(true)} disabled={isLoading || (triviaQuestions.length === 0 && triviaVideos.length === 0)}>
+                                <Text style={styles.addBtnText}>BORRAR TODO</Text>
+                            </TouchableOpacity>
+                        </View>
+                        {confirmDeleteAllTrivia && (
+                            <View style={[styles.listItem, { backgroundColor: '#4d1a1a', marginBottom: 12 }]}>
+                                <Text style={{ color: '#fff', flex: 1 }}>¿Borrar todas las preguntas y todos los videos de trivia?</Text>
+                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginLeft: 8 }]} onPress={doDeleteAllTrivia} disabled={isLoading}>
+                                    <Text style={styles.addBtnText}>SÍ, BORRAR TODO</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginLeft: 8 }]} onPress={() => setConfirmDeleteAllTrivia(false)}>
+                                    <Text style={styles.addBtnText}>NO</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        {seedMessage && (
+                            <View style={[styles.listItem, { backgroundColor: seedMessage.type === 'ok' ? '#1a3d1a' : '#4d1a1a', marginBottom: 12 }]}>
+                                <Text style={{ color: '#fff', flex: 1 }}>{seedMessage.text}</Text>
+                            </View>
+                        )}
+                        <View style={styles.typeRow}>
+                            <TouchableOpacity style={[styles.typeMiniBtn, triviaSubView === 'questions' && styles.typeMiniBtnActive]} onPress={() => { setTriviaSubView('questions'); setEditingQuestion(null); setEditingVideo(null); }}>
+                                <Text style={styles.typeMiniText}>Preguntas ({triviaQuestions.length})</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.typeMiniBtn, triviaSubView === 'videos' && styles.typeMiniBtnActive]} onPress={() => { setTriviaSubView('videos'); setEditingQuestion(null); setEditingVideo(null); }}>
+                                <Text style={styles.typeMiniText}>Videos ({triviaVideos.length})</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {triviaSubView === 'questions' && (
+                            <>
+                                <Text style={[styles.inputLabel, { marginTop: 4 }]}>Listado de preguntas (tocá lápiz para editar)</Text>
+                                {triviaQuestions.map((q) => (
+                                    <View key={q.id} style={styles.listItem}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontWeight: 'bold', color: '#111' }}>{q.question}</Text>
+                                            <Text style={{ fontSize: 11, color: '#666' }}>Correcta: índice {q.correctIndex} • Orden: {q.order}</Text>
+                                        </View>
+                                        <TouchableOpacity onPress={() => handleEditQuestion(q)} style={{ marginLeft: 10 }}>
+                                            <FontAwesome name="pencil" size={18} color={Colors.elegant.gold} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => handleDeleteTriviaQuestion(q.id!)} style={{ marginLeft: 10 }}>
+                                            <FontAwesome name="trash" size={18} color="red" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                                <Text style={[styles.inputLabel, { marginTop: 16 }]}>{editingQuestion ? 'Editar pregunta' : 'Nueva pregunta'}</Text>
+                                {editingQuestion && (
+                                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                                        <TouchableOpacity style={[styles.addBtn, { flex: 1 }]} onPress={handleSaveEditQuestion} disabled={isLoading}><Text style={styles.addBtnText}>GUARDAR CAMBIOS</Text></TouchableOpacity>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', flex: 1 }]} onPress={() => { setEditingQuestion(null); setTriviaQuestion(''); setTriviaOpt1(''); setTriviaOpt2(''); setTriviaOpt3(''); setTriviaOpt4(''); setTriviaOrder(''); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
+                                    </View>
+                                )}
+                                <TextInput style={styles.inputField} placeholder="Pregunta" value={triviaQuestion} onChangeText={setTriviaQuestion} />
+                                <Text style={styles.inputLabel}>Opción 1 (correcta = índice 0)</Text>
+                                <TextInput style={styles.inputField} placeholder="Ej: Boca" value={triviaOpt1} onChangeText={setTriviaOpt1} />
+                                <Text style={styles.inputLabel}>Opción 2 (correcta = índice 1)</Text>
+                                <TextInput style={styles.inputField} placeholder="Ej: River" value={triviaOpt2} onChangeText={setTriviaOpt2} />
+                                <Text style={styles.inputLabel}>Opción 3 (correcta = índice 2)</Text>
+                                <TextInput style={styles.inputField} placeholder="Ej: Atlanta" value={triviaOpt3} onChangeText={setTriviaOpt3} />
+                                <Text style={styles.inputLabel}>Opción 4 (correcta = índice 3)</Text>
+                                <TextInput style={styles.inputField} placeholder="Ej: Racing" value={triviaOpt4} onChangeText={setTriviaOpt4} />
+                                <Text style={styles.inputLabel}>Índice correcta (0-3)</Text>
+                                <View style={styles.typeRow}>
+                                    {[0, 1, 2, 3].map((i) => (
+                                        <TouchableOpacity key={i} style={[styles.typeMiniBtn, triviaCorrect === i && styles.typeMiniBtnActive]} onPress={() => setTriviaCorrect(i)}>
+                                            <Text style={styles.typeMiniText}>{i}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                                <TextInput style={styles.inputField} placeholder="Orden" value={triviaOrder} onChangeText={setTriviaOrder} keyboardType="numeric" />
+                                <TouchableOpacity style={styles.addBtn} onPress={handleAddTriviaQuestion} disabled={isLoading}>
+                                    <Text style={styles.addBtnText}>AGREGAR PREGUNTA</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+
+                        {triviaSubView === 'videos' && (
+                            <>
+                                <Text style={[styles.inputLabel, { marginTop: 4 }]}>Listado de videos (tocá lápiz para poner YouTube y que se reproduzca bien)</Text>
+                                {deletingVideoId && (
+                                    <View style={[styles.listItem, { backgroundColor: '#4d1a1a', marginBottom: 10 }]}>
+                                        <Text style={{ color: '#fff', flex: 1 }}>¿Borrar este video?</Text>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginLeft: 8 }]} onPress={confirmDeleteTriviaVideo} disabled={isLoading}>
+                                            <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginLeft: 8 }]} onPress={() => setDeletingVideoId(null)}>
+                                            <Text style={styles.addBtnText}>NO</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                                {editingVideo && (
+                                    <View style={[styles.listItem, { backgroundColor: '#333', marginBottom: 10 }]}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ color: Colors.elegant.gold, fontWeight: 'bold' }}>YouTube: {editingVideo.name}</Text>
+                                            <TextInput style={[styles.inputField, { marginTop: 8 }]} placeholder="Enlace de YouTube o ID del video" value={editingVideoYoutubeId} onChangeText={setEditingVideoYoutubeId} />
+                                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                                                <TouchableOpacity style={styles.addBtn} onPress={handleSaveEditVideo} disabled={isLoading}><Text style={styles.addBtnText}>GUARDAR</Text></TouchableOpacity>
+                                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555' }]} onPress={() => { setEditingVideo(null); setEditingVideoYoutubeId(''); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </View>
+                                )}
+                                {triviaVideos.map((v) => (
+                                    <View key={v.id} style={styles.listItem}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={{ fontWeight: 'bold', color: '#111' }}>{v.name || v.youtubeId || v.driveFileId || '—'}</Text>
+                                            <Text style={{ fontSize: 10, color: v.youtubeId ? '#0a0' : (v.driveFileId === 'REEMPLAZAR' ? 'red' : '#999') }}>
+                                                {v.youtubeId ? `YouTube: ${v.youtubeId}` : `Drive: ${v.driveFileId || '—'}`}
+                                            </Text>
+                                        </View>
+                                        <TouchableOpacity onPress={() => { setEditingVideo(v); setEditingVideoYoutubeId(v.youtubeId || ''); }} style={{ marginLeft: 10 }}>
+                                            <FontAwesome name="pencil" size={18} color={Colors.elegant.gold} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => handleDeleteTriviaVideo(v.id!)} style={{ marginLeft: 10 }}>
+                                            <FontAwesome name="trash" size={18} color="red" />
+                                        </TouchableOpacity>
+                                    </View>
+                                ))}
+                                <Text style={[styles.inputLabel, { marginTop: 16 }]}>Agregar video (YouTube recomendado: subí a YouTube y pegá el enlace)</Text>
+                                <TextInput style={styles.inputField} placeholder="Nombre (opcional)" value={triviaVideoName} onChangeText={setTriviaVideoName} />
+                                <TextInput style={styles.inputField} placeholder="https://youtube.com/watch?v=... o ID de YouTube" value={triviaVideoId} onChangeText={setTriviaVideoId} />
+                                <TextInput style={styles.inputField} placeholder="Orden" value={triviaVideoOrder} onChangeText={setTriviaVideoOrder} keyboardType="numeric" />
+                                <TouchableOpacity style={styles.addBtn} onPress={handleAddTriviaVideo} disabled={isLoading}>
+                                    <Text style={styles.addBtnText}>IMPORTAR VIDEO</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
                 )}
 

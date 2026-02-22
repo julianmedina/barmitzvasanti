@@ -55,5 +55,15 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
+
+    // 8. Trivia (preguntas y videos para el juego)
+    match /trivia_questions/{questionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    match /trivia_videos/{videoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
   }
 }
