@@ -5,9 +5,11 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
-export default function TriviaYouTubePlayer({ youtubeId, style }: { youtubeId: string; style?: object }) {
+type Props = { youtubeId: string; style?: object; shortFormat?: boolean };
+
+export default function TriviaYouTubePlayer({ youtubeId, style, shortFormat }: Props) {
     return (
-        <View style={[styles.video, style]}>
+        <View style={[shortFormat ? styles.videoShort : styles.video, style]}>
             <iframe
                 width="100%"
                 height="100%"
@@ -25,6 +27,14 @@ const styles = StyleSheet.create({
     video: {
         width: '100%',
         aspectRatio: 16 / 9,
+        backgroundColor: '#000',
+        borderRadius: 12,
+        overflow: 'hidden'
+    },
+    videoShort: {
+        width: '100%',
+        maxWidth: 400,
+        aspectRatio: 9 / 16,
         backgroundColor: '#000',
         borderRadius: 12,
         overflow: 'hidden'

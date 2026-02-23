@@ -108,6 +108,8 @@ export interface TriviaVideo {
     driveFileId?: string;
     name?: string;
     order: number;
+    /** Si false, no se muestra en la trivia (ej. para ocultar antes del evento). Por defecto true. */
+    visible?: boolean;
     timestamp?: any;
 }
 
@@ -217,11 +219,23 @@ export const addHomenaje = async (homenaje: Omit<HomenajeItem, 'id' | 'timestamp
 };
 
 export const updateHomenaje = async (id: string, updates: Partial<HomenajeItem>) => {
+    if (!id) {
+        console.error("updateHomenaje: id is required");
+        throw new Error("Falta el ID del homenaje");
+    }
+    const { id: _id, timestamp: _ts, ...rest } = updates as Partial<HomenajeItem> & { id?: string; timestamp?: unknown };
+    const data = sanitize(rest);
+    if (Object.keys(data).length === 0) {
+        console.warn("updateHomenaje: no fields to update");
+        return;
+    }
     try {
         const docRef = doc(db, 'homenajes', id);
-        await updateDoc(docRef, updates);
-    } catch (e) {
+        await updateDoc(docRef, data);
+    } catch (e: any) {
         console.error("Error updating homenaje", e);
+        const msg = e?.message ?? (e?.code === 'permission-denied' ? 'Sin permiso. Revisá las reglas de Firestore.' : 'No se pudo actualizar.');
+        throw new Error(msg);
     }
 };
 
@@ -237,7 +251,7 @@ export const subscribeToHomenajes = (callback: (items: HomenajeItem[]) => void) 
     console.log("Firestore: Subscribing to homenajes...");
     const q = query(collection(db, 'homenajes'), orderBy('order', 'asc'));
     return onSnapshot(q, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as HomenajeItem));
+        const items = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as HomenajeItem));
         console.log(`Firestore: Received ${items.length} homenajes`);
         callback(items);
     }, (error) => {

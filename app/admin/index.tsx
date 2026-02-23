@@ -37,8 +37,10 @@ import {
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack, useRouter } from 'expo-router';
 import { signInAnonymously } from 'firebase/auth';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import DraggableFlatList from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 type AdminView = 'MENU' | 'CONFIG' | 'NEWS' | 'HOMENAJES' | 'MESSAGES' | 'PROFILES' | 'MEDIA' | 'TRIVIA' | 'DANGER';
 
@@ -102,8 +104,47 @@ export default function AdminPanel() {
     const [triviaVideoOrder, setTriviaVideoOrder] = useState('');
     const [editingVideo, setEditingVideo] = useState<TriviaVideo | null>(null);
     const [editingVideoYoutubeId, setEditingVideoYoutubeId] = useState('');
+    const [editingVideoVisible, setEditingVideoVisible] = useState(true);
     const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null);
+    const [deletingHomenajeId, setDeletingHomenajeId] = useState<string | null>(null);
+    const [editingHomenaje, setEditingHomenaje] = useState<HomenajeItem | null>(null);
+    const [homEditTitle, setHomEditTitle] = useState('');
+    const [homEditYoutube, setHomEditYoutube] = useState('');
+    const [homEditOrder, setHomEditOrder] = useState('');
+    const [orderedHomenajes, setOrderedHomenajes] = useState<HomenajeItem[]>([]);
+    const [publishingHomenajeId, setPublishingHomenajeId] = useState<string | null>(null);
     const [seedMessage, setSeedMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+
+    const sortedHomenajesFromSubscription = useMemo(
+        () => [...homenajesList].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+        [homenajesList]
+    );
+    // Siempre reflejar en la lista lo que viene de Firestore (editar/publicar/reordenar)
+    useEffect(() => {
+        if (sortedHomenajesFromSubscription.length > 0) {
+            setOrderedHomenajes(sortedHomenajesFromSubscription);
+        }
+    }, [sortedHomenajesFromSubscription]);
+
+    const handleHomenajesDragEnd = useCallback(
+        async ({ data }: { data: HomenajeItem[] }) => {
+            setOrderedHomenajes(data);
+            setIsLoading(true);
+            try {
+                await Promise.all(
+                    data
+                        .filter((h) => h.id)
+                        .map((h, i) => updateHomenaje(h.id!, { order: i }))
+                );
+            } catch (e) {
+                console.error('Error updating homenajes order', e);
+                Alert.alert("Error", "No se pudo guardar el orden.");
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        []
+    );
     const [editingQuestion, setEditingQuestion] = useState<TriviaQuestion | null>(null);
     const [confirmDeleteAllTrivia, setConfirmDeleteAllTrivia] = useState(false);
 
@@ -202,8 +243,52 @@ export default function AdminPanel() {
         setIsLoading(false);
     };
 
-    const handleDeleteHomenaje = (id: string) => {
-        Alert.alert("Confirmar", "¿Borrar homenaje?", [{ text: "No" }, { text: "Sí", onPress: () => deleteHomenaje(id) }]);
+    const handleConfirmDeleteHomenaje = async () => {
+        if (!deletingHomenajeId) return;
+        setIsLoading(true);
+        try {
+            await deleteHomenaje(deletingHomenajeId);
+            setDeletingHomenajeId(null);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleEditHomenaje = (h: HomenajeItem) => {
+        if (!h.id) return;
+        setEditingHomenaje(h);
+        setHomEditTitle(h.title ?? '');
+        setHomEditYoutube(h.youtubeId ?? '');
+        setHomEditOrder(String(h.order ?? ''));
+    };
+
+    const handleSaveEditHomenaje = async () => {
+        if (!editingHomenaje?.id || !homEditTitle.trim() || !homEditYoutube.trim()) {
+            Alert.alert("Error", "Completá título y YouTube ID o enlace.");
+            return;
+        }
+        const youtubeId = extractYoutubeId(homEditYoutube) || homEditYoutube.trim();
+        if (!youtubeId) {
+            Alert.alert("Error", "YouTube: pegá un enlace o un ID de 11 caracteres.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await updateHomenaje(editingHomenaje.id, {
+                title: homEditTitle.trim(),
+                youtubeId,
+                order: parseInt(homEditOrder, 10) || 0
+            });
+            setEditingHomenaje(null);
+            setHomEditTitle('');
+            setHomEditYoutube('');
+            setHomEditOrder('');
+            Alert.alert("Listo", "Homenaje actualizado.");
+        } catch (e: any) {
+            Alert.alert("Error", e?.message || "No se pudo actualizar el homenaje.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleDeleteMessage = (id: string) => {
@@ -273,7 +358,8 @@ export default function AdminPanel() {
                 ...(youtubeId && { youtubeId }),
                 ...(driveFileId && { driveFileId }),
                 name: triviaVideoName.trim() || undefined,
-                order: parseInt(triviaVideoOrder, 10) || triviaVideos.length
+                order: parseInt(triviaVideoOrder, 10) || triviaVideos.length,
+                visible: true
             });
             setTriviaVideoName(''); setTriviaVideoId(''); setTriviaVideoOrder('');
             Alert.alert("Éxito", youtubeId ? "Video de YouTube agregado." : "Referencia a Drive agregada.");
@@ -311,10 +397,11 @@ export default function AdminPanel() {
         }
         setIsLoading(true);
         try {
-            await updateTriviaVideo(editingVideo.id, { youtubeId });
+            await updateTriviaVideo(editingVideo.id, { youtubeId, visible: editingVideoVisible });
             setEditingVideo(null);
             setEditingVideoYoutubeId('');
-            Alert.alert("Listo", "Video de YouTube actualizado.");
+            setEditingVideoVisible(true);
+            Alert.alert("Listo", "Video actualizado.");
         } catch (e: any) {
             Alert.alert("Error", e?.message || "No se pudo actualizar");
         } finally {
@@ -400,7 +487,8 @@ export default function AdminPanel() {
                 await addTriviaVideo({
                     name: TRIVIA_SEED_VIDEOS[i].name,
                     youtubeId: TRIVIA_SEED_VIDEOS[i].youtubeId,
-                    order: TRIVIA_SEED_VIDEOS[i].order
+                    order: TRIVIA_SEED_VIDEOS[i].order,
+                    visible: true
                 });
             }
             const msg = "Se cargaron 4 preguntas y 8 YouTube Shorts para la trivia.";
@@ -540,20 +628,78 @@ export default function AdminPanel() {
                 {currentView === 'HOMENAJES' && (
                     <View style={styles.section}>
                         {renderHeader('VIDEOS HOMENAJES')}
+                        {deletingHomenajeId && (
+                            <View style={[styles.listItem, { backgroundColor: '#4d1a1a', marginBottom: 10 }]}>
+                                <Text style={{ color: '#fff', flex: 1 }}>¿Borrar este video homenaje?</Text>
+                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginLeft: 8 }]} onPress={handleConfirmDeleteHomenaje} disabled={isLoading}>
+                                    <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginLeft: 8 }]} onPress={() => setDeletingHomenajeId(null)} disabled={isLoading}>
+                                    <Text style={styles.addBtnText}>NO</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        {editingHomenaje && (
+                            <View style={[styles.listItem, { backgroundColor: '#333', marginBottom: 12 }]}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: Colors.elegant.gold, fontWeight: 'bold', marginBottom: 8 }}>Editar homenaje</Text>
+                                    <TextInput style={styles.inputField} placeholder="Título" value={homEditTitle} onChangeText={setHomEditTitle} />
+                                    <TextInput style={styles.inputField} placeholder="YouTube ID o enlace" value={homEditYoutube} onChangeText={setHomEditYoutube} />
+                                    <TextInput style={styles.inputField} placeholder="Orden" value={homEditOrder} onChangeText={setHomEditOrder} keyboardType="numeric" />
+                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                                        <TouchableOpacity style={styles.addBtn} onPress={handleSaveEditHomenaje} disabled={isLoading}><Text style={styles.addBtnText}>GUARDAR</Text></TouchableOpacity>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555' }]} onPress={() => { setEditingHomenaje(null); setHomEditTitle(''); setHomEditYoutube(''); setHomEditOrder(''); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
                         <TextInput style={styles.inputField} placeholder="Título" value={homTitle} onChangeText={setHomTitle} />
                         <TextInput style={styles.inputField} placeholder="YouTube ID" value={homYoutube} onChangeText={setHomYoutube} />
                         <TextInput style={styles.inputField} placeholder="Orden" value={homOrder} onChangeText={setHomOrder} keyboardType="numeric" />
                         <TouchableOpacity style={styles.addBtn} onPress={handleAddHomenaje}><Text style={styles.addBtnText}>CREAR HOMENAJE</Text></TouchableOpacity>
-                        {homenajesList.map(h => (
-                            <View key={h.id} style={styles.listItem}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontWeight: 'bold' }}>{h.title}</Text>
-                                    <Text style={{ fontSize: 10, color: '#999' }}>Orden: {h.order}</Text>
-                                </View>
-                                <Switch value={!h.locked} onValueChange={(v) => updateHomenaje(h.id!, { locked: !v })} />
-                                <TouchableOpacity onPress={() => handleDeleteHomenaje(h.id!)} style={{ marginLeft: 15 }}><FontAwesome name="trash" size={18} color="red" /></TouchableOpacity>
-                            </View>
-                        ))}
+                        <Text style={[styles.inputLabel, { marginTop: 8 }]}>Arrastrá para reordenar (mantené apretado en el ícono ≡). Tocá el lápiz para editar.</Text>
+                        <View style={{ height: 360, marginTop: 8 }}>
+                            <GestureHandlerRootView style={{ flex: 1 }}>
+                                <DraggableFlatList<HomenajeItem>
+                                    data={orderedHomenajes.filter((h) => h.id)}
+                                    keyExtractor={(h) => h.id ?? ''}
+                                    onDragEnd={handleHomenajesDragEnd}
+                                    renderItem={({ item: h, drag, isActive }) => (
+                                        <View style={[styles.listItem, isActive && { opacity: 0.9, backgroundColor: '#ddd' }]}>
+                                            <TouchableOpacity onLongPress={drag} style={{ marginRight: 12, padding: 4 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                <FontAwesome name="bars" size={18} color="#666" />
+                                            </TouchableOpacity>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={{ fontWeight: 'bold' }}>{h.title}</Text>
+                                                <Text style={{ fontSize: 10, color: '#999' }}>Orden: {h.order}</Text>
+                                            </View>
+                                            <TouchableOpacity onPress={() => handleEditHomenaje(h)} style={{ marginRight: 8 }} disabled={!!editingHomenaje}>
+                                                <FontAwesome name="pencil" size={18} color={Colors.elegant.gold} />
+                                            </TouchableOpacity>
+                                            <Switch
+                                                value={!h.locked}
+                                                disabled={publishingHomenajeId === h.id}
+                                                onValueChange={async (v) => {
+                                                    if (!h.id) return;
+                                                    setPublishingHomenajeId(h.id);
+                                                    try {
+                                                        await updateHomenaje(h.id, { locked: !v });
+                                                    } catch (e: any) {
+                                                        Alert.alert("Error al publicar/ocultar", e?.message ?? "No se pudo actualizar. Revisá la consola.");
+                                                    } finally {
+                                                        setPublishingHomenajeId(null);
+                                                    }
+                                                }}
+                                                trackColor={{ false: '#767577', true: Colors.elegant.gold }}
+                                            />
+                                            <TouchableOpacity onPress={() => h.id && setDeletingHomenajeId(h.id)} style={{ marginLeft: 15 }} disabled={!!deletingHomenajeId}>
+                                                <FontAwesome name="trash" size={18} color="red" />
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+                                />
+                            </GestureHandlerRootView>
+                        </View>
                     </View>
                 )}
 
@@ -721,9 +867,13 @@ export default function AdminPanel() {
                                         <View style={{ flex: 1 }}>
                                             <Text style={{ color: Colors.elegant.gold, fontWeight: 'bold' }}>YouTube: {editingVideo.name}</Text>
                                             <TextInput style={[styles.inputField, { marginTop: 8 }]} placeholder="Enlace de YouTube o ID del video" value={editingVideoYoutubeId} onChangeText={setEditingVideoYoutubeId} />
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                                                <Switch value={editingVideoVisible} onValueChange={setEditingVideoVisible} trackColor={{ false: '#555', true: Colors.elegant.gold }} thumbColor="#fff" />
+                                                <Text style={{ color: '#fff', marginLeft: 10 }}>Visible en la trivia</Text>
+                                            </View>
                                             <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
                                                 <TouchableOpacity style={styles.addBtn} onPress={handleSaveEditVideo} disabled={isLoading}><Text style={styles.addBtnText}>GUARDAR</Text></TouchableOpacity>
-                                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555' }]} onPress={() => { setEditingVideo(null); setEditingVideoYoutubeId(''); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
+                                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555' }]} onPress={() => { setEditingVideo(null); setEditingVideoYoutubeId(''); setEditingVideoVisible(true); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
                                             </View>
                                         </View>
                                     </View>
@@ -734,6 +884,7 @@ export default function AdminPanel() {
                                             <Text style={{ fontWeight: 'bold', color: '#111' }}>{v.name || v.youtubeId || v.driveFileId || '—'}</Text>
                                             <Text style={{ fontSize: 10, color: v.youtubeId ? '#0a0' : (v.driveFileId === 'REEMPLAZAR' ? 'red' : '#999') }}>
                                                 {v.youtubeId ? `YouTube: ${v.youtubeId}` : `Drive: ${v.driveFileId || '—'}`}
+                                                {v.visible === false ? ' · Oculta' : ''}
                                             </Text>
                                         </View>
                                         <TouchableOpacity onPress={() => { setEditingVideo(v); setEditingVideoYoutubeId(v.youtubeId || ''); }} style={{ marginLeft: 10 }}>

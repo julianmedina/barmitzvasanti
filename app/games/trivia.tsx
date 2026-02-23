@@ -10,6 +10,9 @@ import TriviaYouTubePlayer from './TriviaYouTubePlayer';
 const TOTAL_GAME_SECONDS = 30;
 const SECONDS_PER_QUESTION = 8;
 
+// Fallback YouTube Short si no hay videos en la DB (para "mirá el video para seguir")
+const FALLBACK_VIDEO_YOUTUBE_ID = 'WjMbH6RSMFc';
+
 // Fallback if DB has no questions
 const FALLBACK_QUESTIONS: TriviaQuestion[] = [
     { question: '¿De qué cuadro es Medina?', options: ['Boca', 'River', 'Atlanta', 'Racing'], correctIndex: 1, order: 0 }
@@ -64,6 +67,23 @@ export default function TriviaGame() {
         }
     }, []);
 
+    const playCorrectSound = useCallback(() => {
+        const s = soundCorrectRef.current;
+        if (s) {
+            s.getStatusAsync().then((st) => {
+                if (st.isLoaded) s.setPositionAsync(0).then(() => s.playAsync()).catch(() => {});
+            }).catch(() => {});
+        }
+    }, []);
+    const playWrongSound = useCallback(() => {
+        const s = soundWrongRef.current;
+        if (s) {
+            s.getStatusAsync().then((st) => {
+                if (st.isLoaded) s.setPositionAsync(0).then(() => s.playAsync()).catch(() => {});
+            }).catch(() => {});
+        }
+    }, []);
+
     useEffect(() => {
         let mounted = true;
         (async () => {
@@ -71,7 +91,7 @@ export default function TriviaGame() {
                 const [qList, vList] = await Promise.all([getTriviaQuestionsOnce(), getTriviaVideosOnce()]);
                 if (mounted) {
                     setQuestions(qList);
-                    setVideos(vList);
+                    setVideos(vList.filter((v) => v.visible !== false));
                 }
             } catch (e) {
                 console.error(e);
@@ -81,6 +101,10 @@ export default function TriviaGame() {
         })();
         return () => { mounted = false; };
     }, []);
+
+    useEffect(() => {
+        loadSounds();
+    }, [loadSounds]);
 
     const startGame = useCallback(() => {
         const list = questions.length > 0 ? questions : FALLBACK_QUESTIONS;
@@ -142,10 +166,10 @@ export default function TriviaGame() {
         };
     }, [gameStarted, gameOver, showVideo, questionTimeLeft, answered]);
 
-    const pickRandomVideo = useCallback((): { type: 'youtube'; youtubeId: string } | { type: 'drive'; url: string } | null => {
+    const pickRandomVideo = useCallback((): { type: 'youtube'; youtubeId: string } | { type: 'drive'; url: string } => {
         const valid = videos.map((v) => getTriviaVideoPlayback(v)).filter((x): x is NonNullable<ReturnType<typeof getTriviaVideoPlayback>> => x != null);
-        if (valid.length === 0) return null;
-        return valid[Math.floor(Math.random() * valid.length)];
+        if (valid.length > 0) return valid[Math.floor(Math.random() * valid.length)];
+        return { type: 'youtube', youtubeId: FALLBACK_VIDEO_YOUTUBE_ID };
     }, [videos]);
 
     const handleAnswer = useCallback((selectedOptionIndex: number) => {
@@ -158,20 +182,26 @@ export default function TriviaGame() {
         if (isCorrect) {
             const points = 100 + questionTimeLeft * 10;
             setScore(s => s + points);
-            soundCorrectRef.current?.replayAsync().catch(() => {});
+            playCorrectSound();
             nextQuestion();
         } else {
-            // Perdiste: sonido y ver video; después del video va a pantalla de resultado
-            soundWrongRef.current?.replayAsync().catch(() => {});
+            // Fallaste: termina la partida, sonido y video; después "Volver a Jugar" para empezar de nuevo
+            playWrongSound();
+            setGameOver(true);
+            if (totalTimerRef.current) clearInterval(totalTimerRef.current);
+            if (questionTimerRef.current) clearInterval(questionTimerRef.current);
+            (async () => {
+                try {
+                    await updatePlayerScore(scoreRef.current);
+                } catch (e) {
+                    console.error(e);
+                }
+            })();
             const playback = pickRandomVideo();
-            if (playback) {
-                setCurrentVideoPlayback(playback);
-                setShowVideo(true);
-            } else {
-                endGame(scoreRef.current);
-            }
+            setCurrentVideoPlayback(playback);
+            setShowVideo(true);
         }
-    }, [answered, shuffledQuestions, currentQIndex, questions, questionTimeLeft, pickRandomVideo, displayOptions]);
+    }, [answered, shuffledQuestions, currentQIndex, questions, questionTimeLeft, pickRandomVideo, displayOptions, playCorrectSound, playWrongSound]);
 
     const nextQuestion = useCallback(() => {
         const list = shuffledQuestions.length ? shuffledQuestions : (questions.length ? questions : FALLBACK_QUESTIONS);
@@ -188,7 +218,8 @@ export default function TriviaGame() {
     const onVideoFinished = useCallback(() => {
         setShowVideo(false);
         setCurrentVideoPlayback(null);
-        endGame(scoreRef.current);
+        setGameOver(false);
+        setGameStarted(false);
     }, []);
 
     const endGame = async (finalScore: number) => {
@@ -223,7 +254,7 @@ export default function TriviaGame() {
                 <View style={styles.card}>
                     <FontAwesome name="question-circle-o" size={80} color={Colors.river.primary} />
                     <Text style={styles.introTitle}>¿CUÁNTO SABÉS DE MEDINA EN 30 SEGUNDOS?</Text>
-                    <Text style={styles.introText}>Respondé rápido. Si fallás, mirá un video para seguir jugando.</Text>
+                    <Text style={styles.introText}>Respondé rápido. Si fallás, mirá el video y tocá Volver a Jugar para intentar de nuevo.</Text>
                     <TouchableOpacity style={styles.playButton} onPress={startGame}>
                         <Text style={styles.playText}>JUGAR AHORA</Text>
                     </TouchableOpacity>
@@ -241,13 +272,13 @@ export default function TriviaGame() {
             <View style={styles.container}>
                 <Stack.Screen options={{ headerShown: false }} />
                 <View style={styles.videoWrapper}>
-                    <Text style={styles.videoTitle}>Mirá el video para seguir jugando</Text>
+                    <Text style={styles.videoTitle}>Mirá el video</Text>
                     {isYoutube ? (
-                        <TriviaYouTubePlayer youtubeId={currentVideoPlayback.youtubeId} />
+                        <TriviaYouTubePlayer youtubeId={currentVideoPlayback.youtubeId} shortFormat />
                     ) : (
                         <Video
                             source={{ uri: currentVideoPlayback.url }}
-                            style={styles.video}
+                            style={styles.videoShort}
                             useNativeControls
                             shouldPlay
                             onPlaybackStatusUpdate={(status) => {
@@ -256,7 +287,7 @@ export default function TriviaGame() {
                         />
                     )}
                     <TouchableOpacity style={styles.skipVideoBtn} onPress={onVideoFinished}>
-                        <Text style={styles.playText}>CONTINUAR</Text>
+                        <Text style={styles.playText}>VOLVER A JUGAR</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -473,6 +504,14 @@ const styles = StyleSheet.create({
     video: {
         width: '100%',
         aspectRatio: 16 / 9,
+        backgroundColor: '#000',
+        borderRadius: 12,
+        overflow: 'hidden'
+    },
+    videoShort: {
+        width: '100%',
+        maxWidth: 400,
+        aspectRatio: 9 / 16,
         backgroundColor: '#000',
         borderRadius: 12,
         overflow: 'hidden'
