@@ -1,8 +1,9 @@
+import { PWAInstallBanner } from '@/components/PWAInstallBanner';
 import { Colors, Fonts } from '@/constants/theme';
-import { auth, subscribeToConfigs, isNameTaken } from '@/services/database';
+import { auth, subscribeToConfigs, isNameTaken, updatePlayerScore } from '@/services/database';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -29,6 +30,16 @@ export default function LandingScreen() {
             unsub();
         };
     }, []);
+
+    // Si ya tiene sesión (volvió a entrar), ir directo a la app
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                router.replace('/(tabs)');
+            }
+        });
+        return () => unsubscribe();
+    }, [router]);
 
     // DESKTOP BLOCKER REMOVED
 
@@ -57,6 +68,7 @@ export default function LandingScreen() {
                 return;
             }
 
+            await updatePlayerScore(0, nickname.trim());
             router.replace('/(tabs)');
         } catch (e) {
             console.error(e);
@@ -102,6 +114,7 @@ export default function LandingScreen() {
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
+            {Platform.OS === 'web' && <PWAInstallBanner />}
         </View>
     );
 }

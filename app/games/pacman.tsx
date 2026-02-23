@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Dimensions,
     Platform,
+    Pressable,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -70,6 +71,17 @@ export default function PacmanGameScreen() {
                 router.replace('/games/pacman-lobby');
             }
         });
+
+        // Use cached game_state when coming from lobby (so ghost/pacman role is correct)
+        const { auth: authRef } = require('@/services/firebaseConfig');
+        const cachedState = pacmanSocket.getLastGameState();
+        const uid = authRef.currentUser?.uid || myUid;
+        if (cachedState?.maze) {
+            setGameState(cachedState);
+            pacmanSocket.clearLastGameState();
+            const me = cachedState.players?.find((p: any) => p.uid === uid);
+            if (me) myPos.current = { x: me.x, y: me.y };
+        }
 
         // --- Socket Listeners ---
 
@@ -369,6 +381,16 @@ export default function PacmanGameScreen() {
         moveDirection.current = { x: 0, y: 0 };
     };
 
+    // D-pad: press = move, release = stop (for mobile)
+    const dpadSize = 56;
+    const handleDpadPressIn = (dx: number, dy: number) => {
+        if (isDead) return;
+        moveDirection.current = { x: dx, y: dy };
+    };
+    const handleDpadPressOut = () => {
+        moveDirection.current = { x: 0, y: 0 };
+    };
+
     const handleRespawn = async () => {
         try {
             await pacmanSocket.requestRespawn('dummy_video');
@@ -521,18 +543,20 @@ export default function PacmanGameScreen() {
                                 const isPacman = player.role === 'pacman';
                                 const PLAYER_SIZE = 30;
 
-                                // Calculate rotation
+                                // Rotation: default 0deg so Pacman always has a visible orientation
                                 let rotation = '0deg';
-                                if (isMe) {
-                                    if (moveDirection.current.x > 0) rotation = '0deg';
-                                    if (moveDirection.current.x < 0) rotation = '180deg';
-                                    if (moveDirection.current.y > 0) rotation = '90deg';
-                                    if (moveDirection.current.y < 0) rotation = '-90deg';
-                                } else if (player.direction) {
-                                    if (player.direction === 'right') rotation = '0deg';
-                                    if (player.direction === 'left') rotation = '180deg';
-                                    if (player.direction === 'down') rotation = '90deg';
-                                    if (player.direction === 'up') rotation = '-90deg';
+                                if (isPacman) {
+                                    if (isMe) {
+                                        if (moveDirection.current.x > 0) rotation = '0deg';
+                                        else if (moveDirection.current.x < 0) rotation = '180deg';
+                                        else if (moveDirection.current.y > 0) rotation = '90deg';
+                                        else if (moveDirection.current.y < 0) rotation = '-90deg';
+                                    } else if (player.direction) {
+                                        if (player.direction === 'right') rotation = '0deg';
+                                        else if (player.direction === 'left') rotation = '180deg';
+                                        else if (player.direction === 'down') rotation = '90deg';
+                                        else if (player.direction === 'up') rotation = '-90deg';
+                                    }
                                 }
 
                                 return (
@@ -543,20 +567,20 @@ export default function PacmanGameScreen() {
                                             {
                                                 left: x - PLAYER_SIZE / 2,
                                                 top: y - PLAYER_SIZE / 2,
+                                                zIndex: 20,
                                             }
                                         ]}
                                     >
                                         {isPacman ? (
-                                            // CSS PACMAN
+                                            // Pacman: circle + mouth (rotation por defecto para que siempre se vea)
                                             <View style={{
                                                 width: PLAYER_SIZE,
                                                 height: PLAYER_SIZE,
                                                 borderRadius: PLAYER_SIZE / 2,
                                                 backgroundColor: '#FFD700',
                                                 transform: [{ rotate: rotation }],
-                                                overflow: 'hidden'
+                                                overflow: 'hidden',
                                             }}>
-                                                {/* Mouth */}
                                                 {mouthOpen && (
                                                     <View style={{
                                                         position: 'absolute',
@@ -568,7 +592,7 @@ export default function PacmanGameScreen() {
                                                         borderRightWidth: PLAYER_SIZE / 2,
                                                         borderTopWidth: PLAYER_SIZE / 4,
                                                         borderBottomWidth: PLAYER_SIZE / 4,
-                                                        borderRightColor: 'black', // Assuming black background
+                                                        borderRightColor: '#000',
                                                         borderTopColor: 'transparent',
                                                         borderBottomColor: 'transparent',
                                                     }} />
@@ -631,14 +655,57 @@ export default function PacmanGameScreen() {
                     </View>
                 </View>
 
-                {/* Mobile Controls */}
+                {/* Mobile Controls: Joystick + D-pad */}
                 {Platform.OS !== 'web' && (
-                    <View style={styles.controls}>
-                        <Joystick
-                            onMove={handleJoystickMove}
-                            onStop={handleJoystickStop}
-                        />
-                    </View>
+                    <>
+                        <View style={styles.controls}>
+                            <Joystick
+                                onMove={handleJoystickMove}
+                                onStop={handleJoystickStop}
+                            />
+                        </View>
+                        <View style={styles.dpad}>
+                            <View style={styles.dpadRow}>
+                                <View style={{ width: dpadSize }} />
+                                <Pressable
+                                    style={styles.dpadBtn}
+                                    onPressIn={() => handleDpadPressIn(0, -1)}
+                                    onPressOut={handleDpadPressOut}
+                                >
+                                    <FontAwesome name="chevron-up" size={28} color="rgba(255,255,255,0.9)" />
+                                </Pressable>
+                                <View style={{ width: dpadSize }} />
+                            </View>
+                            <View style={styles.dpadRow}>
+                                <Pressable
+                                    style={styles.dpadBtn}
+                                    onPressIn={() => handleDpadPressIn(-1, 0)}
+                                    onPressOut={handleDpadPressOut}
+                                >
+                                    <FontAwesome name="chevron-left" size={28} color="rgba(255,255,255,0.9)" />
+                                </Pressable>
+                                <View style={[styles.dpadBtn, { backgroundColor: 'transparent', opacity: 0 }]} />
+                                <Pressable
+                                    style={styles.dpadBtn}
+                                    onPressIn={() => handleDpadPressIn(1, 0)}
+                                    onPressOut={handleDpadPressOut}
+                                >
+                                    <FontAwesome name="chevron-right" size={28} color="rgba(255,255,255,0.9)" />
+                                </Pressable>
+                            </View>
+                            <View style={styles.dpadRow}>
+                                <View style={{ width: dpadSize }} />
+                                <Pressable
+                                    style={styles.dpadBtn}
+                                    onPressIn={() => handleDpadPressIn(0, 1)}
+                                    onPressOut={handleDpadPressOut}
+                                >
+                                    <FontAwesome name="chevron-down" size={28} color="rgba(255,255,255,0.9)" />
+                                </Pressable>
+                                <View style={{ width: dpadSize }} />
+                            </View>
+                        </View>
+                    </>
                 )}
 
                 {/* Death Screen Overlay */}
@@ -785,6 +852,25 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 30,
         left: 30,
+    },
+    dpad: {
+        position: 'absolute',
+        bottom: 40,
+        right: 24,
+    },
+    dpadRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    dpadBtn: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: 2,
     },
     deathOverlay: {
         ...StyleSheet.absoluteFillObject,

@@ -26,9 +26,9 @@ export default function SantiNoEsSantiScreen() {
             await updatePlayerScore(50);
 
             Alert.alert(
-                "¡Enviado!",
-                "Tu mensaje ya está viajando a la pantalla gigante. ¡Ganaste 50 puntos!",
-                [{ text: "BUENÍSIMO", onPress: () => router.replace('/(tabs)') }]
+                "¡Listo!",
+                "Ya llegó tu mensaje y saldrá en pantalla pronto.",
+                [{ text: "Volver al inicio", onPress: () => router.replace('/(tabs)') }]
             );
         } catch (e) {
             Alert.alert("Error", "No se pudo enviar el mensaje.");

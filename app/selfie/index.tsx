@@ -1,19 +1,22 @@
 import { Colors, Fonts } from '@/constants/theme';
 import { auth, saveMediaMetadata, uploadMediaFile } from '@/services/database';
 import { FontAwesome5 } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Stack, useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
     Dimensions,
     Image,
+    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
+import { captureRef } from 'react-native-view-shot';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,7 +25,10 @@ export default function SelfieScreen() {
     const [photo, setPhoto] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [facing, setFacing] = useState<'front' | 'back'>('front');
+    const [countdown, setCountdown] = useState<number | null>(null);
     const cameraRef = useRef<CameraView>(null);
+    const takePictureRef = useRef<() => Promise<void>>(() => {});
+    const previewShotRef = useRef<View>(null);
     const router = useRouter();
 
     if (!permission) {
@@ -31,13 +37,15 @@ export default function SelfieScreen() {
     }
 
     if (!permission.granted) {
-        // Camera permissions are not granted yet.
         return (
             <View style={styles.container}>
                 <Stack.Screen options={{ title: 'Selfie', headerTransparent: true, headerTintColor: 'white' }} />
                 <View style={styles.messageContainer}>
                     <FontAwesome5 name="camera" size={50} color={Colors.elegant.gold} />
                     <Text style={styles.messageText}>Necesitamos acceso a tu cámara para la selfie.</Text>
+                    {Platform.OS === 'web' && (
+                        <Text style={styles.messageSubtext}>Si estás en el navegador y la cámara no funciona, después de dar permiso podés usar "Elegir foto" para subir una imagen.</Text>
+                    )}
                     <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
                         <Text style={styles.permissionButtonText}>DAR PERMISO</Text>
                     </TouchableOpacity>
@@ -54,9 +62,7 @@ export default function SelfieScreen() {
                     base64: false,
                     exif: false,
                 });
-                if (result) {
-                    setPhoto(result.uri);
-                }
+                if (result) setPhoto(result.uri);
             } catch (error) {
                 console.error("Error taking picture:", error);
                 Alert.alert("Error", "No se pudo tomar la foto");
@@ -64,19 +70,64 @@ export default function SelfieScreen() {
         }
     };
 
+    const startCountdownAndCapture = () => {
+        setCountdown(3);
+    };
+
+    const pickImageFromGallery = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permiso", "Necesitamos acceso a la galería para elegir una foto.");
+            return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.7,
+        });
+        if (!result.canceled && result.assets[0]) setPhoto(result.assets[0].uri);
+    };
+
+    takePictureRef.current = takePicture;
+
+    useEffect(() => {
+        if (countdown === null) return;
+        if (countdown === 0) {
+            setCountdown(null);
+            takePictureRef.current();
+            return;
+        }
+        const id = setTimeout(() => setCountdown(countdown - 1), 1000);
+        return () => clearTimeout(id);
+    }, [countdown]);
+
     const confirmPicture = async () => {
         if (!photo) return;
 
         setIsUploading(true);
         try {
+            let uriToUpload = photo;
+            // Grabar la foto con el sobreimpreso "Bar Mitzvá de SANTI MEDINA"
+            if (previewShotRef.current) {
+                try {
+                    const captured = await captureRef(previewShotRef, {
+                        format: 'jpg',
+                        quality: 0.9,
+                        result: 'tmpfile',
+                    });
+                    if (captured) uriToUpload = captured;
+                } catch (e) {
+                    console.warn("No se pudo grabar el texto en la foto, se sube la original:", e);
+                }
+            }
+
             const user = auth.currentUser;
             const userId = user?.uid ?? 'guest';
 
-            // 1. Upload to Storage
             const path = `selfies/${userId}_${Date.now()}.jpg`;
-            const downloadUrl = await uploadMediaFile(photo, path);
+            const downloadUrl = await uploadMediaFile(uriToUpload, path);
 
-            // 2. Save to Firestore
             await saveMediaMetadata({
                 url: downloadUrl,
                 section: 'camera',
@@ -120,22 +171,57 @@ export default function SelfieScreen() {
                         style={styles.camera}
                         facing={facing}
                     >
+                        {/* Overlay de marca: Bar Mitzvá de SANTI MEDINA (tipografía y colores del login/home) */}
+                        <View style={styles.brandOverlay} pointerEvents="none">
+                            <Text style={styles.brandLine1}>Bar Mitzvá de</Text>
+                            <Text style={styles.brandLine2}>SANTI MEDINA</Text>
+                        </View>
+
+                        {countdown !== null && (
+                            <View style={styles.countdownOverlay} pointerEvents="none">
+                                <Text style={styles.countdownSmile}>¡Sonríe!</Text>
+                                <Text style={styles.countdownNumber}>{countdown === 0 ? '¡Click!' : countdown}</Text>
+                            </View>
+                        )}
+
                         <View style={styles.buttonContainer}>
                             <TouchableOpacity style={styles.flipButton} onPress={toggleCameraFacing}>
                                 <FontAwesome5 name="sync" size={24} color="white" />
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.captureButton} onPress={takePicture}>
+                            <TouchableOpacity
+                                style={styles.captureButton}
+                                onPress={startCountdownAndCapture}
+                                disabled={countdown !== null}
+                            >
                                 <View style={styles.captureButtonInner} />
                             </TouchableOpacity>
 
-                            <View style={styles.flipButton} />
+                            {Platform.OS === 'web' ? (
+                                <TouchableOpacity style={styles.galleryButton} onPress={pickImageFromGallery}>
+                                    <FontAwesome5 name="images" size={22} color="white" />
+                                    <Text style={styles.galleryButtonText}>Elegir foto</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <View style={styles.flipButton} />
+                            )}
                         </View>
                     </CameraView>
                 </View>
             ) : (
                 <View style={styles.previewContainer}>
-                    <Image source={{ uri: photo }} style={styles.previewImage} />
+                    {/* Vista que se captura para subir: foto + texto sobreimpreso */}
+                    <View
+                        ref={previewShotRef}
+                        style={styles.previewShotWrapper}
+                        collapsable={false}
+                    >
+                        <Image source={{ uri: photo }} style={styles.previewImage} />
+                        <View style={styles.brandOverlayOnPreview}>
+                            <Text style={styles.brandLine1OnPreview}>Bar Mitzvá de</Text>
+                            <Text style={styles.brandLine2OnPreview}>SANTI MEDINA</Text>
+                        </View>
+                    </View>
 
                     {isUploading ? (
                         <View style={styles.uploadingOverlay}>
@@ -188,6 +274,14 @@ const styles = StyleSheet.create({
         fontSize: 18,
         textAlign: 'center',
         marginTop: 20,
+        marginBottom: 12,
+    },
+    messageSubtext: {
+        color: Colors.elegant.textSecondary,
+        fontFamily: Fonts.sans,
+        fontSize: 13,
+        textAlign: 'center',
+        marginHorizontal: 24,
         marginBottom: 30,
     },
     permissionButton: {
@@ -207,6 +301,65 @@ const styles = StyleSheet.create({
     },
     camera: {
         flex: 1,
+    },
+    brandOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        paddingTop: 60,
+        paddingHorizontal: 24,
+        paddingBottom: 20,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    brandLine1: {
+        fontFamily: Fonts.light,
+        color: 'white',
+        fontSize: 16,
+        letterSpacing: 3,
+    },
+    brandLine2: {
+        fontFamily: Fonts.bold,
+        color: Colors.elegant.gold,
+        fontSize: 26,
+        letterSpacing: 2,
+        marginTop: 4,
+    },
+    countdownOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    countdownSmile: {
+        fontFamily: Fonts.bold,
+        color: Colors.elegant.gold,
+        fontSize: 28,
+        letterSpacing: 2,
+        marginBottom: 16,
+    },
+    countdownNumber: {
+        fontFamily: Fonts.bold,
+        color: 'white',
+        fontSize: 72,
+    },
+    galleryButton: {
+        width: 50,
+        minWidth: 70,
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderRadius: 25,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    galleryButtonText: {
+        color: 'white',
+        fontFamily: Fonts.sans,
+        fontSize: 10,
+        marginTop: 4,
     },
     buttonContainer: {
         flex: 1,
@@ -244,9 +397,40 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'black',
     },
-    previewImage: {
+    previewShotWrapper: {
         flex: 1,
-        resizeMode: 'contain',
+        position: 'relative',
+    },
+    previewImage: {
+        ...StyleSheet.absoluteFillObject,
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    brandOverlayOnPreview: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        paddingTop: 48,
+        paddingHorizontal: 24,
+        paddingBottom: 16,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    brandLine1OnPreview: {
+        fontFamily: Fonts.light,
+        color: 'white',
+        fontSize: 18,
+        letterSpacing: 3,
+    },
+    brandLine2OnPreview: {
+        fontFamily: Fonts.bold,
+        color: Colors.elegant.gold,
+        fontSize: 28,
+        letterSpacing: 2,
+        marginTop: 4,
     },
     previewActions: {
         flexDirection: 'row',

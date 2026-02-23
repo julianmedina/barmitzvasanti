@@ -73,11 +73,11 @@ export default function HomeScreen() {
           <Text style={styles.menuText}>Soccer</Text>
         </TouchableOpacity> */}
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/games/roulette')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/games/missions')}>
           <View style={[styles.iconCircle, { backgroundColor: Colors.river.primary }]}>
             <FontAwesome name="star" size={30} color="white" />
           </View>
-          <Text style={styles.menuText}>Ruleta</Text>
+          <Text style={styles.menuText}>Misiones</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/games/trivia')}>

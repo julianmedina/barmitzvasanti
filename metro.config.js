@@ -12,6 +12,11 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
             type: 'sourceFile',
         };
     }
+    // Force html2canvas to use ESM build on web so Metro can resolve it (main is UMD and fails)
+    if (platform === 'web' && moduleName === 'html2canvas') {
+        const html2canvasEsm = path.resolve(__dirname, 'node_modules/html2canvas/dist/html2canvas.esm.js');
+        return { filePath: html2canvasEsm, type: 'sourceFile' };
+    }
     if (originalResolveRequest) {
         return originalResolveRequest(context, moduleName, platform);
     }

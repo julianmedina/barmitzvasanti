@@ -11,13 +11,11 @@ import { Stack } from 'expo-router';
 import Head from 'expo-router/head';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { signInAnonymously } from 'firebase/auth';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { PWAInstallBanner } from '@/components/PWAInstallBanner';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -42,8 +40,7 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
       registerForPushNotificationsAsync();
 
-      // Global Firebase Auth Session
-      signInAnonymously(auth).catch(e => console.error("Firebase auth failed", e));
+      // Auth: no auto sign-in; user signs in on home when entering nickname (session is then remembered)
     }
   }, [loaded]);
 
@@ -68,7 +65,6 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
-      {Platform.OS === 'web' && <PWAInstallBanner />}
       <StatusBar style="auto" />
     </ThemeProvider>
   );

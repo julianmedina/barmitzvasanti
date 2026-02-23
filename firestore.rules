@@ -24,11 +24,12 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
 
-    // 3. Social Messages
+    // 3. Social Messages (permite actualizar para despublicar/ocultar)
     match /messages/{messageId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.text.size() <= 100;
-      allow delete: if false; // Admin only via console or future logic
+      allow update: if isAuthenticated();
+      allow delete: if false; // Admin only via console o lógica futura
     }
 
     // 4. News Collection
@@ -43,10 +44,11 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
-    // 6. Media Metadata
+    // 6. Media Metadata (fotos: crear, actualizar visible/despublicar, borrar)
     match /media/{mediaId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
       allow delete: if isAuthenticated();
     }
 
@@ -64,6 +66,22 @@ service cloud.firestore {
     match /trivia_videos/{videoId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
+    }
+
+    // 9. Misiones (Marketing) — orden fijo desde admin, no al azar
+    match /missions/{missionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // 10. Progreso de misiones por usuario
+    match /mission_progress/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // 11. Asignación de 13 misiones al azar por usuario
+    match /mission_assignments/{userId} {
+      allow read, write: if isOwner(userId);
     }
   }
 }

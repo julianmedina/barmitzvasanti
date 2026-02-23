@@ -11,6 +11,8 @@ class PacmanSocketService {
     private inputSequenceNumber: number = 0;
     private lastPingTime: number = 0;
     public ping: number = 0;
+    /** Cache of game_state from join_game so the game screen can use it when navigating from lobby */
+    private lastGameState: any = null;
 
     connect() {
         if (this.socket?.connected) {
@@ -96,9 +98,10 @@ class PacmanSocketService {
                 firebaseToken: '' // Optional: add token verification if needed
             });
 
-            // Wait for game_state response
+            // Wait for game_state response (cache so game screen gets it when navigating from lobby)
             this.socket!.once('game_state', (state) => {
                 clearTimeout(timeout);
+                this.lastGameState = state;
                 resolve(state);
             });
 
@@ -194,6 +197,14 @@ class PacmanSocketService {
 
     isConnected() {
         return this.socket?.connected || false;
+    }
+
+    getLastGameState() {
+        return this.lastGameState;
+    }
+
+    clearLastGameState() {
+        this.lastGameState = null;
     }
 }
 

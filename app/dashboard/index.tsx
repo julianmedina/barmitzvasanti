@@ -68,10 +68,11 @@ export default function DashboardScreen() {
             }
         });
 
-        // 3. Subscribe to Media (Photos)
+        // 3. Subscribe to Media (Photos) — solo visibles
         const unsubMedia = subscribeToMedia((items) => {
-            if (items.length > 0) {
-                setLivePhotos(items.map(m => m.url));
+            const visible = items.filter(m => m.visible !== false).map(m => m.url);
+            if (visible.length > 0) {
+                setLivePhotos(visible);
             } else {
                 setLivePhotos(PHOTOS);
             }

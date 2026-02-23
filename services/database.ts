@@ -3,6 +3,7 @@ import {
     addDoc, collection,
     deleteDoc,
     doc,
+    getDoc,
     getDocs,
     increment,
     limit, onSnapshot, orderBy, query,
@@ -11,9 +12,10 @@ import {
     where,
     writeBatch
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { Platform } from 'react-native';
-import { auth, db, storage } from './firebaseConfig';
+import { app, auth, db, storage } from './firebaseConfig';
 
 export const isNameTaken = async (name: string) => {
     const q = query(collection(db, 'scores'), where('name', '==', name), limit(1));
@@ -78,11 +80,15 @@ export interface UserProfile {
 export interface MediaMetadata {
     id?: string;
     url: string;
-    section: 'camera' | 'profile' | 'general';
+    section: 'camera' | 'profile' | 'general' | 'saludo';
     userId: string;
     timestamp: any;
     synced: boolean;
     driveId?: string;
+    /** Si false, no se muestra en la galería pública (dashboard). Por defecto true. */
+    visible?: boolean;
+    /** Para que syncToDrive suba con el mime correcto (ej. video/mp4). */
+    mimeType?: string;
 }
 
 export interface AppConfig {
@@ -111,6 +117,49 @@ export interface TriviaVideo {
     /** Si false, no se muestra en la trivia (ej. para ocultar antes del evento). Por defecto true. */
     visible?: boolean;
     timestamp?: any;
+}
+
+// Missions (gamificación, ex Ruleta)
+export interface Mission {
+    id?: string;
+    title: string;
+    description?: string;
+    type?: string; // primo, tío, amigo, familiar, etc.
+    icon?: string; // emoji o URL de ícono
+    imageUrl?: string;
+    order: number;
+    active: boolean;
+    prize?: string;
+    points?: number;
+    limitPerUser?: number;
+    validFrom?: any;
+    validTo?: any;
+    timestamp?: any;
+}
+
+export interface UserMissionProgress {
+    id: string; // userId
+    completedMissionIds: string[];
+    updatedAt: any;
+}
+
+/** Asignación de 13 misiones al azar por usuario (desde un pool de ~50). */
+export interface MissionAssignment {
+    id: string; // userId
+    missionIds: string[];
+    assignedAt: any;
+}
+
+export const MISSIONS_TO_COMPLETE = 13;
+
+/** Puntos por nivel de misión (1ª a 13ª). La suma total es 91218. */
+export const POINTS_BY_LEVEL: number[] = [
+    1000, 2003, 3006, 4009, 5011, 6014, 7017, 8020, 9022, 10025, 11028, 12030, 13033,
+];
+
+export function getPointsForCompletionLevel(levelIndex: number): number {
+    if (levelIndex < 0 || levelIndex >= POINTS_BY_LEVEL.length) return POINTS_BY_LEVEL[0] ?? 1000;
+    return POINTS_BY_LEVEL[levelIndex];
 }
 
 // 1. Leaderboard / Scores (Cumulative)
@@ -143,6 +192,14 @@ export const subscribeToLeaderboard = (callback: (data: UserScore[]) => void) =>
     return onSnapshot(q, (snapshot) => {
         const scores = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserScore));
         callback(scores);
+    });
+};
+
+/** Puntos acumulados del usuario (para mostrar en Misiones). */
+export const subscribeToCurrentUserScore = (userId: string, callback: (points: number) => void) => {
+    const scoreRef = doc(db, 'scores', userId);
+    return onSnapshot(scoreRef, (snap) => {
+        callback(snap.exists() ? (snap.data()?.points ?? 0) : 0);
     });
 };
 
@@ -240,10 +297,15 @@ export const updateHomenaje = async (id: string, updates: Partial<HomenajeItem>)
 };
 
 export const deleteHomenaje = async (id: string) => {
+    if (!id) {
+        throw new Error("Falta el ID del homenaje");
+    }
     try {
         await deleteDoc(doc(db, 'homenajes', id));
-    } catch (e) {
+    } catch (e: any) {
         console.error("Error deleting homenaje", e);
+        const msg = e?.message ?? (e?.code === 'permission-denied' ? 'Sin permiso. Revisá las reglas de Firestore.' : 'No se pudo borrar.');
+        throw new Error(msg);
     }
 };
 
@@ -283,10 +345,13 @@ export const updateNews = async (newsId: string, updates: Partial<NewsAlert>) =>
 };
 
 export const deleteNews = async (newsId: string) => {
+    if (!newsId) throw new Error("Falta el ID de la noticia");
     try {
         await deleteDoc(doc(db, 'news', newsId));
-    } catch (e) {
+    } catch (e: any) {
         console.error("Error deleting news", e);
+        const msg = e?.message ?? (e?.code === 'permission-denied' ? 'Sin permiso. Revisá las reglas de Firestore.' : 'No se pudo borrar.');
+        throw new Error(msg);
     }
 };
 
@@ -340,11 +405,24 @@ export const saveMediaMetadata = async (media: Omit<MediaMetadata, 'id' | 'synce
         const docRef = await addDoc(collection(db, 'media'), sanitize({
             ...media,
             synced: false,
+            visible: media.visible !== false,
             timestamp: new Date()
         }));
         return docRef.id;
     } catch (e) {
         console.error("Error saving media metadata", e);
+        throw e;
+    }
+};
+
+export const updateMedia = async (id: string, updates: Partial<MediaMetadata>) => {
+    try {
+        const { id: _id, timestamp: _ts, ...rest } = updates as Partial<MediaMetadata> & { id?: string; timestamp?: unknown };
+        const data = sanitize(rest);
+        if (Object.keys(data).length === 0) return;
+        await updateDoc(doc(db, 'media', id), data);
+    } catch (e) {
+        console.error("Error updating media", e);
         throw e;
     }
 };
@@ -382,6 +460,14 @@ export const subscribeToConfigs = (callback: (configs: Record<string, any>) => v
         });
         callback(configs);
     });
+};
+
+/** Sincroniza las fotos del Book desde una carpeta de Google Drive (Cloud Function). */
+export const syncBookFromDriveFolder = async (folderId: string): Promise<{ success: boolean; count: number }> => {
+    const functions = getFunctions(app);
+    const fn = httpsCallable<{ folderId: string }, { success: boolean; count: number }>(functions, 'syncBookFromDriveFolder');
+    const result = await fn({ folderId });
+    return result.data;
 };
 
 // 8. Storage Helpers
@@ -524,3 +610,135 @@ export function getTriviaVideoPlayback(v: TriviaVideo): { type: 'youtube'; youtu
     if (driveId && driveId !== 'REEMPLAZAR') return { type: 'drive', url: `https://drive.google.com/uc?export=download&id=${driveId}` };
     return null;
 }
+
+// 12. Missions (Marketing → Misiones)
+export const addMission = async (mission: Omit<Mission, 'id' | 'timestamp'>) => {
+    try {
+        const docRef = await addDoc(collection(db, 'missions'), sanitize({
+            ...mission,
+            timestamp: new Date()
+        }));
+        return docRef.id;
+    } catch (e) {
+        console.error("Error adding mission", e);
+        throw e;
+    }
+};
+
+export const updateMission = async (id: string, updates: Partial<Mission>) => {
+    try {
+        const { id: _id, timestamp: _ts, ...rest } = updates as Partial<Mission> & { id?: string; timestamp?: unknown };
+        await updateDoc(doc(db, 'missions', id), sanitize(rest));
+    } catch (e) {
+        console.error("Error updating mission", e);
+        throw e;
+    }
+};
+
+export const deleteMission = async (id: string) => {
+    try {
+        await deleteDoc(doc(db, 'missions', id));
+    } catch (e) {
+        console.error("Error deleting mission", e);
+        throw e;
+    }
+};
+
+export const subscribeToMissions = (callback: (missions: Mission[]) => void) => {
+    const q = query(collection(db, 'missions'), orderBy('order', 'asc'));
+    return onSnapshot(q, (snapshot) => {
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mission));
+        callback(items);
+    });
+};
+
+export const getActiveMissionsOnce = async (): Promise<Mission[]> => {
+    const q = query(collection(db, 'missions'), orderBy('order', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Mission))
+        .filter(m => m.active !== false);
+};
+
+export const completeMission = async (userId: string, missionId: string, pointsToAward?: number) => {
+    try {
+        const progressRef = doc(db, 'mission_progress', userId);
+        const snap = await getDoc(progressRef);
+        const currentIds: string[] = snap.exists() ? (snap.data().completedMissionIds || []) : [];
+        if (currentIds.includes(missionId)) return;
+        const newIds = [...currentIds, missionId];
+        await setDoc(progressRef, {
+            completedMissionIds: newIds,
+            updatedAt: new Date()
+        }, { merge: true });
+        if (pointsToAward && pointsToAward > 0) {
+            const user = auth.currentUser;
+            if (user && user.uid === userId) await updatePlayerScore(pointsToAward);
+        }
+    } catch (e) {
+        console.error("Error completing mission", e);
+        throw e;
+    }
+};
+
+export const subscribeToUserMissionProgress = (userId: string, callback: (progress: UserMissionProgress | null) => void) => {
+    const progressRef = doc(db, 'mission_progress', userId);
+    return onSnapshot(progressRef, (snap) => {
+        if (snap.exists()) {
+            callback({ id: snap.id, ...snap.data() } as UserMissionProgress);
+        } else {
+            callback(null);
+        }
+    });
+};
+
+export const getUserMissionProgressOnce = async (userId: string): Promise<string[]> => {
+    const progressRef = doc(db, 'mission_progress', userId);
+    const snap = await getDoc(progressRef);
+    return snap.exists() ? (snap.data().completedMissionIds || []) : [];
+};
+
+/** Obtiene o asigna las 13 misiones al azar para este usuario desde el pool. */
+export const ensureUserMissionAssignment = async (
+    userId: string,
+    poolMissionIds: string[]
+): Promise<string[]> => {
+    const assignmentRef = doc(db, 'mission_assignments', userId);
+    const snap = await getDoc(assignmentRef);
+    const existing = snap.exists() ? (snap.data().missionIds || []) : [];
+    if (existing.length === MISSIONS_TO_COMPLETE) return existing;
+
+    const pool = [...poolMissionIds];
+    if (pool.length < MISSIONS_TO_COMPLETE) {
+        await setDoc(assignmentRef, {
+            missionIds: pool,
+            assignedAt: new Date(),
+        }, { merge: true });
+        return pool;
+    }
+    // Shuffle and take 13
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const chosen = pool.slice(0, MISSIONS_TO_COMPLETE);
+    await setDoc(assignmentRef, {
+        missionIds: chosen,
+        assignedAt: new Date(),
+    }, { merge: true });
+    return chosen;
+};
+
+export const subscribeToMissionAssignment = (
+    userId: string,
+    callback: (assignment: MissionAssignment | null) => void
+) => {
+    const assignmentRef = doc(db, 'mission_assignments', userId);
+    return onSnapshot(assignmentRef, (snap) => {
+        if (snap.exists()) {
+            callback({ id: snap.id, ...snap.data() } as MissionAssignment);
+        } else {
+            callback(null);
+        }
+    });
+};

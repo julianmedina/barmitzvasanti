@@ -25,14 +25,14 @@ export default function GamesScreen() {
 
             <TouchableOpacity
                 style={[styles.card, { backgroundColor: Colors.river.primary, marginTop: 20 }]}
-                onPress={() => router.push('/games/roulette')}
+                onPress={() => router.push('/games/missions')}
             >
                 <View style={styles.iconContainer}>
                     <FontAwesome name="star" size={40} color="white" />
                 </View>
                 <View style={styles.textContainer}>
-                    <Text style={styles.gameTitle}>La Ruleta</Text>
-                    <Text style={styles.gameSubtitle}>¡Ganate una prenda!</Text>
+                    <Text style={styles.gameTitle}>Misiones</Text>
+                    <Text style={styles.gameSubtitle}>Completá desafíos y sumá puntos</Text>
                 </View>
             </TouchableOpacity>
 
