@@ -91,7 +91,7 @@ export default function CameraScreen() {
             }
             setIsRecording(true);
             recordingPromiseRef.current = null;
-            const promise = cameraRef.current.recordAsync();
+            const promise = cameraRef.current.recordAsync({ maxDuration: 10 });
             recordingPromiseRef.current = promise;
         } catch (e) {
             console.error("startRecording", e);
@@ -110,6 +110,11 @@ export default function CameraScreen() {
             recordingPromiseRef.current = null;
             if (result?.uri) {
                 setCapturedVideo(result.uri);
+                if (Platform.OS === 'web') {
+                    window.alert('¡Video grabado! Ahora tocá en "COMPLETAR Y SUBIR" abajo para enviarlo.');
+                } else {
+                    Alert.alert('¡Video grabado!', 'Ahora tocá en "COMPLETAR Y SUBIR" abajo para enviarlo.');
+                }
             } else {
                 Alert.alert("Error", "No se obtuvo el video. Probá de nuevo.");
             }

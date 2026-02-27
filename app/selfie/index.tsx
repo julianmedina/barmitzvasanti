@@ -145,12 +145,12 @@ export default function SelfieScreen() {
             });
 
             if (Platform.OS === 'web') {
-                window.alert("¡Éxito! Tu selfie se subió correctamente. ¡Buscate en el Dashboard!");
+                window.alert("¡Éxito! Tu selfie se subió correctamente. ¡Buscate en la pantalla principal!");
                 router.replace('/(tabs)');
             } else {
                 Alert.alert(
                     "¡Éxito!",
-                    "Tu selfie se subió correctamente. ¡Buscate en el Dashboard!",
+                    "Tu selfie se subió correctamente. ¡Buscate en la pantalla principal!",
                     [{ text: "OK", onPress: () => router.replace('/(tabs)') }]
                 );
             }
