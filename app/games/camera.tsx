@@ -94,46 +94,44 @@ export default function CameraScreen() {
             setIsRecording(true);
             setRecordingTime(0);
             recordingTimerRef.current = setInterval(() => {
-                setRecordingTime(prev => {
-                    if (prev >= 6) {
-                        stopRecording(); // Automatically stop if it goes past 6
-                        return 6;
-                    }
-                    return prev + 1;
-                });
+                setRecordingTime(prev => prev + 1);
             }, 1000);
             recordingPromiseRef.current = null;
+            // maxDuration auto-stops the recording at 6s
             const promise = cameraRef.current.recordAsync({ maxDuration: 6 });
             recordingPromiseRef.current = promise;
-        } catch (e) {
-            console.error("startRecording", e);
-            Alert.alert("Error", "No se pudo iniciar la grabación");
+            // Wait for the recording to finish (auto-stops at 6s)
+            const result = await promise;
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             setIsRecording(false);
+            recordingPromiseRef.current = null;
+            if (result?.uri) {
+                uploadAndComplete(result.uri, true);
+            } else {
+                // Even if no video, let the user continue
+                if (missionId) router.replace('/games/missions');
+                else router.navigate('/(tabs)');
+            }
+        } catch (e) {
+            console.error("startRecording", e);
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+            setIsRecording(false);
+            // On error, still advance so the game is not blocked
+            if (missionId) router.replace('/games/missions');
+            else router.navigate('/(tabs)');
         }
     };
 
     const stopRecording = async () => {
         if (!cameraRef.current || !isRecording) return;
-        const promise = recordingPromiseRef.current;
         try {
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             cameraRef.current.stopRecording();
             setIsRecording(false);
-            const result = await promise;
-            recordingPromiseRef.current = null;
-            if (result?.uri) {
-                // Para videos, mandamos automáticamente sin pasar por la preview
-                uploadAndComplete(result.uri, true);
-            } else {
-                Alert.alert("Error", "No se obtuvo el video. Probá de nuevo.");
-            }
         } catch (e) {
             console.error("stopRecording", e);
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             setIsRecording(false);
-            recordingPromiseRef.current = null;
-            Alert.alert("Error", "No se pudo guardar el video. Probá de nuevo.");
         }
     };
 
@@ -344,17 +342,17 @@ export default function CameraScreen() {
                         <TouchableOpacity style={styles.captureBtn} onPress={takePicture} disabled={!!countdown}>
                             <View style={styles.innerCircle} />
                         </TouchableOpacity>
+                    ) : isRecording ? (
+                        <View style={[styles.captureBtn, styles.captureBtnRecording]}>
+                            <Text style={styles.stopLabel}>GRABANDO</Text>
+                        </View>
                     ) : (
                         <TouchableOpacity
-                            style={[styles.captureBtn, isRecording && styles.captureBtnRecording]}
-                            onPress={isRecording ? stopRecording : startRecording}
+                            style={styles.captureBtn}
+                            onPress={startRecording}
                             disabled={!!countdown}
                         >
-                            {isRecording ? (
-                                <Text style={styles.stopLabel}>DETENER</Text>
-                            ) : (
-                                <View style={styles.recordDot} />
-                            )}
+                            <View style={styles.recordDot} />
                         </TouchableOpacity>
                     )}
                     {Platform.OS === 'web' && mode === 'picture' ? (
