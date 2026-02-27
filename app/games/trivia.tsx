@@ -1,5 +1,5 @@
 import { Colors, Fonts } from '@/constants/theme';
-import { getTriviaQuestionsOnce, getTriviaVideosOnce, getTriviaVideoPlayback, TriviaQuestion, TriviaVideo, updatePlayerScore } from '@/services/database';
+import { getTriviaQuestionsOnce, getTriviaVideoPlayback, getTriviaVideosOnce, TriviaQuestion, TriviaVideo, updatePlayerScore } from '@/services/database';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Audio, Video } from 'expo-av';
 import { Stack, useRouter } from 'expo-router';
@@ -71,16 +71,16 @@ export default function TriviaGame() {
         const s = soundCorrectRef.current;
         if (s) {
             s.getStatusAsync().then((st) => {
-                if (st.isLoaded) s.setPositionAsync(0).then(() => s.playAsync()).catch(() => {});
-            }).catch(() => {});
+                if (st.isLoaded) s.setPositionAsync(0).then(() => s.playAsync()).catch(() => { });
+            }).catch(() => { });
         }
     }, []);
     const playWrongSound = useCallback(() => {
         const s = soundWrongRef.current;
         if (s) {
             s.getStatusAsync().then((st) => {
-                if (st.isLoaded) s.setPositionAsync(0).then(() => s.playAsync()).catch(() => {});
-            }).catch(() => {});
+                if (st.isLoaded) s.setPositionAsync(0).then(() => s.playAsync()).catch(() => { });
+            }).catch(() => { });
         }
     }, []);
 
@@ -272,7 +272,9 @@ export default function TriviaGame() {
             <View style={styles.container}>
                 <Stack.Screen options={{ headerShown: false }} />
                 <View style={styles.videoWrapper}>
-                    <Text style={styles.videoTitle}>Mirá el video</Text>
+                    <TouchableOpacity style={[styles.skipVideoBtn, { marginTop: 0, marginBottom: 20, paddingVertical: 10 }]} onPress={onVideoFinished}>
+                        <Text style={[styles.playText, { fontSize: 14 }]}>SEGUIR JUGANDO</Text>
+                    </TouchableOpacity>
                     {isYoutube ? (
                         <TriviaYouTubePlayer youtubeId={currentVideoPlayback.youtubeId} shortFormat />
                     ) : (
@@ -287,7 +289,7 @@ export default function TriviaGame() {
                         />
                     )}
                     <TouchableOpacity style={styles.skipVideoBtn} onPress={onVideoFinished}>
-                        <Text style={styles.playText}>VOLVER A JUGAR</Text>
+                        <Text style={styles.playText}>SEGUIR JUGANDO</Text>
                     </TouchableOpacity>
                 </View>
             </View>

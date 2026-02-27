@@ -1,8 +1,8 @@
 import { Colors, Fonts } from '@/constants/theme';
 import { auth, saveMediaMetadata, uploadMediaFile } from '@/services/database';
 import { FontAwesome5 } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -26,14 +26,15 @@ export default function SelfieScreen() {
     const [isUploading, setIsUploading] = useState(false);
     const [facing, setFacing] = useState<'front' | 'back'>('front');
     const [countdown, setCountdown] = useState<number | null>(null);
+    const [cameraReady, setCameraReady] = useState(false);
     const cameraRef = useRef<CameraView>(null);
-    const takePictureRef = useRef<() => Promise<void>>(() => {});
+    const takePictureRef = useRef<() => Promise<void>>(() => { });
     const previewShotRef = useRef<View>(null);
     const router = useRouter();
 
     if (!permission) {
         // Camera permissions are still loading.
-        return <View style={styles.container}><ActivityIndicator color={Colors.elegant.gold} /></View>;
+        return <View style={styles.container} />;
     }
 
     if (!permission.granted) {
@@ -71,6 +72,10 @@ export default function SelfieScreen() {
     };
 
     const startCountdownAndCapture = () => {
+        if (!cameraReady && Platform.OS !== 'web') {
+            Alert.alert("Espera", "La cámara aún no está lista.");
+            return;
+        }
         setCountdown(3);
     };
 
@@ -153,6 +158,7 @@ export default function SelfieScreen() {
 
     const toggleCameraFacing = () => {
         setFacing(current => (current === 'back' ? 'front' : 'back'));
+        setCameraReady(false);
     };
 
     return (
@@ -170,6 +176,7 @@ export default function SelfieScreen() {
                         ref={cameraRef}
                         style={styles.camera}
                         facing={facing}
+                        onCameraReady={() => setTimeout(() => setCameraReady(true), 500)}
                     >
                         {/* Overlay de marca: Bar Mitzvá de SANTI MEDINA (tipografía y colores del login/home) */}
                         <View style={styles.brandOverlay} pointerEvents="none">

@@ -29,7 +29,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.text.size() <= 100;
       allow update: if isAuthenticated();
-      allow delete: if false; // Admin only via console o lógica futura
+      allow delete: if isAuthenticated(); // Admin reset logic
     }
 
     // 4. News Collection
