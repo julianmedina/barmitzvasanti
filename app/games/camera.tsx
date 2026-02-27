@@ -223,18 +223,28 @@ export default function CameraScreen() {
             })();
 
             if (missionId) {
+                if (Platform.OS === 'web') {
+                    window.alert("¡Misión Cumplida! Tu video se está subiendo y ganaste los puntos.");
+                } else {
+                    Alert.alert("¡Misión Cumplida!", "Tu video se está subiendo y ganaste los puntos.");
+                }
                 router.replace('/games/missions?celebrate=1');
             } else {
                 if (Platform.OS === 'web') {
-                    window.alert("¡Enviando en segundo plano! Ganaste 150 puntos.");
+                    window.alert("¡Misión Cumplida! Tu video se está subiendo y ganaste 150 puntos.");
                 } else {
-                    Alert.alert("¡Listo!", "Subiendo de fondo. Ganaste 150 puntos.", [{ text: "¡BUENÍSIMO!", onPress: () => router.navigate('/(tabs)') }]);
+                    Alert.alert("¡Misión Cumplida!", "Tu video se está subiendo y ganaste 150 puntos.", [{ text: "¡BUENÍSIMO!", onPress: () => router.navigate('/(tabs)') }]);
                 }
                 if (Platform.OS === 'web') router.navigate('/(tabs)');
             }
         } catch (e) {
             console.error("Upload error:", e);
-            Alert.alert("Error", "No se pudo subir.");
+            Alert.alert("Error leve", "Hubo un problema procesando la carga, pero igual podés continuar.");
+            if (missionId) {
+                router.replace('/games/missions');
+            } else {
+                router.navigate('/(tabs)');
+            }
             setIsUploading(false);
         }
     };
@@ -317,6 +327,12 @@ export default function CameraScreen() {
                     </View>
                 )}
 
+                {isRecording && (
+                    <View style={styles.recordingOverlay}>
+                        <Text style={styles.recordingTextOverlay}>{recordingTime}s / 6s</Text>
+                    </View>
+                )}
+
                 <View style={styles.controls}>
                     <TouchableOpacity
                         style={styles.switchBtn}
@@ -335,7 +351,7 @@ export default function CameraScreen() {
                             disabled={!!countdown}
                         >
                             {isRecording ? (
-                                <Text style={[styles.stopLabel, { fontSize: 24, fontWeight: '900', lineHeight: 28 }]}>{recordingTime}s / 6s{"\n"}ENVIAR</Text>
+                                <Text style={styles.stopLabel}>DETENER</Text>
                             ) : (
                                 <View style={styles.recordDot} />
                             )}
@@ -409,6 +425,21 @@ const styles = StyleSheet.create({
         fontSize: 120,
         fontFamily: Fonts.bold,
         color: 'white',
+    },
+    recordingOverlay: {
+        position: 'absolute',
+        top: 120,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+    },
+    recordingTextOverlay: {
+        fontSize: 60,
+        fontFamily: Fonts.bold,
+        color: 'red',
+        textShadowColor: 'black',
+        textShadowOffset: { width: 2, height: 2 },
+        textShadowRadius: 10,
     },
     controls: {
         position: 'absolute',
