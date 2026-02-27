@@ -34,7 +34,7 @@ export default function CameraScreen() {
     const [isRecording, setIsRecording] = useState(false);
     const [cameraReady, setCameraReady] = useState(false);
     const [facing, setFacing] = useState<CameraType>('back');
-    const recordingPromiseRef = useRef<Promise<{ uri: string }> | null>(null);
+    const recordingPromiseRef = useRef<Promise<{ uri: string } | undefined> | null>(null);
 
     const cameraRef = useRef<CameraView>(null);
     const params = useLocalSearchParams<{
@@ -251,6 +251,7 @@ export default function CameraScreen() {
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
             <CameraView
+                key={facing}
                 style={styles.camera}
                 ref={cameraRef}
                 facing={facing}

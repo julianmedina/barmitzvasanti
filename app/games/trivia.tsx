@@ -272,9 +272,13 @@ export default function TriviaGame() {
             <View style={styles.container}>
                 <Stack.Screen options={{ headerShown: false }} />
                 <View style={styles.videoWrapper}>
-                    <TouchableOpacity style={[styles.skipVideoBtn, { marginTop: 0, marginBottom: 20, paddingVertical: 10 }]} onPress={onVideoFinished}>
-                        <Text style={[styles.playText, { fontSize: 14 }]}>SEGUIR JUGANDO</Text>
+                    <TouchableOpacity
+                        style={[styles.skipVideoBtn, { marginTop: 0, marginBottom: 16, paddingVertical: 8, paddingHorizontal: 20, alignSelf: 'center' }]}
+                        onPress={onVideoFinished}
+                    >
+                        <Text style={[styles.playText, { fontSize: 13 }]}>Seguir Jugando</Text>
                     </TouchableOpacity>
+
                     {isYoutube ? (
                         <TriviaYouTubePlayer youtubeId={currentVideoPlayback.youtubeId} shortFormat />
                     ) : (
@@ -288,9 +292,6 @@ export default function TriviaGame() {
                             }}
                         />
                     )}
-                    <TouchableOpacity style={styles.skipVideoBtn} onPress={onVideoFinished}>
-                        <Text style={styles.playText}>SEGUIR JUGANDO</Text>
-                    </TouchableOpacity>
                 </View>
             </View>
         );

@@ -3,6 +3,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Alert } from 'react-native';
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
@@ -40,11 +41,28 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Inicio',
-          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
+          href: null,
         }}
       />
-
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'administrar',
+          tabBarIcon: ({ color }) => <TabBarIcon name="cog" color={color} />,
+        }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            Alert.alert("¿Sos curioso?", "¡Volvé a jugar! 😉");
+          },
+        }}
+      />
+      <Tabs.Screen
+        name="games"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

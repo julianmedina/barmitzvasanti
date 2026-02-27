@@ -177,6 +177,7 @@ export default function SelfieScreen() {
             {!photo ? (
                 <View style={{ flex: 1 }}>
                     <CameraView
+                        key={facing}
                         ref={cameraRef}
                         style={styles.camera}
                         facing={facing}

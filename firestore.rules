@@ -16,6 +16,7 @@ service cloud.firestore {
     match /scores/{userId} {
       allow read: if isAuthenticated();
       allow write: if isOwner(userId);
+      allow delete: if isAuthenticated(); // Permite reiniciar ranking desde Admin
     }
 
     // 2. Profiles Collection
@@ -24,12 +25,12 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
 
-    // 3. Social Messages (permite actualizar para despublicar/ocultar)
+    // 3. Social Messages (permite borrar para el reset de admin)
     match /messages/{messageId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.text.size() <= 100;
       allow update: if isAuthenticated();
-      allow delete: if isAuthenticated(); // Admin reset logic
+      allow delete: if isAuthenticated(); // Admin reset logic (Santi no es Santi)
     }
 
     // 4. News Collection

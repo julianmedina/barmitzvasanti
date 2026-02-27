@@ -40,8 +40,8 @@ export default function DashboardScreen() {
     // Data States
     const [liveNews, setLiveNews] = useState<NewsAlert[]>(FALLBACK_NEWS);
     const [leaderboard, setLeaderboard] = useState<UserScore[]>([]);
-    const [livePhotos, setLivePhotos] = useState<string[]>(PHOTOS);
-    const [liveMessages, setLiveMessages] = useState<string[]>(MESSAGES);
+    const [livePhotos, setLivePhotos] = useState<string[]>([]);
+    const [liveMessages, setLiveMessages] = useState<string[]>([]);
     const [configs, setConfigs] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(true);
 
@@ -71,21 +71,13 @@ export default function DashboardScreen() {
         // 3. Subscribe to Media (Photos) — solo visibles
         const unsubMedia = subscribeToMedia((items) => {
             const visible = items.filter(m => m.visible !== false).map(m => m.url);
-            if (visible.length > 0) {
-                setLivePhotos(visible);
-            } else {
-                setLivePhotos(PHOTOS);
-            }
+            setLivePhotos(visible);
         });
 
         // 4. Subscribe to Social Messages (Filtered by Visibility)
         const unsubMessages = subscribeToMessages((msgs) => {
             const visible = msgs.filter(m => m.visible !== false).map(m => m.text);
-            if (visible.length > 0) {
-                setLiveMessages(visible);
-            } else {
-                setLiveMessages(MESSAGES);
-            }
+            setLiveMessages(visible);
         });
 
         // 5. Subscribe to Configs
@@ -182,93 +174,103 @@ export default function DashboardScreen() {
 
                     <View style={styles.mainContent}>
 
-                {/* 1. Left: Leaderboard (Live & Paged) */}
-                <View style={styles.leaderboardContainer}>
-                    <View style={styles.sectionHeader}>
-                        <FontAwesome name="trophy" size={20} color={Colors.elegant.gold} />
-                        <Text style={styles.sectionTitle}>RANKING EN VIVO</Text>
-                        <View style={styles.pageIndicator}>
-                            <Text style={styles.pageLabel}>{leaderboardPage + 1}/{TOTAL_PAGES}</Text>
-                        </View>
-                    </View>
-
-                    {loading && <ActivityIndicator color={Colors.elegant.gold} style={{ marginTop: 20 }} />}
-
-                    {!loading && leaderboard.length === 0 && (
-                        <Text style={styles.emptyLead}>¡Que empiece el juego!</Text>
-                    )}
-
-                    <View style={styles.rankList}>
-                        {currentLeaderboard.map((item, localIdx) => {
-                            const globalIdx = startIdx + localIdx;
-                            return (
-                                <View key={item.id || globalIdx} style={[
-                                    styles.rankItem,
-                                    globalIdx === 0 && styles.rankItemGold
-                                ]}>
-                                    <View style={styles.rankLeft}>
-                                        <Text style={[styles.rankNum, globalIdx === 0 && { color: 'black' }]}>
-                                            #{globalIdx + 1}
-                                        </Text>
-                                        <Image source={{ uri: item.avatar || `https://ui-avatars.com/api/?name=${item.name}&background=random` }} style={styles.miniAvatar} />
-                                        <Text numberOfLines={1} style={[styles.rankName, globalIdx === 0 && { color: 'black', fontFamily: Fonts.bold }]}>
-                                            {item.name}
-                                        </Text>
-                                    </View>
-                                    <View style={[styles.rankRight, globalIdx === 0 && { backgroundColor: 'rgba(0,0,0,0.1)' }]}>
-                                        <Text style={[styles.rankPts, globalIdx === 0 && { color: 'black' }]}>
-                                            {item.points.toLocaleString()}
-                                        </Text>
-                                    </View>
+                        {/* 1. Left: Leaderboard (Live & Paged) */}
+                        <View style={styles.leaderboardContainer}>
+                            <View style={styles.sectionHeader}>
+                                <FontAwesome name="trophy" size={20} color={Colors.elegant.gold} />
+                                <Text style={styles.sectionTitle}>RANKING EN VIVO</Text>
+                                <View style={styles.pageIndicator}>
+                                    <Text style={styles.pageLabel}>{leaderboardPage + 1}/{TOTAL_PAGES}</Text>
                                 </View>
-                            );
-                        })}
-                    </View>
+                            </View>
 
-                    {leaderboard.length > ITEMS_PER_PAGE && (
-                        <View style={styles.moreIndicator}>
-                            <Text style={styles.moreText}>MÁS POSICIONES ABAJO...</Text>
-                        </View>
-                    )}
-                </View>
+                            {loading && <ActivityIndicator color={Colors.elegant.gold} style={{ marginTop: 20 }} />}
 
-                {/* 2. Middle: Dynamic Photo Slideshow */}
-                <View style={styles.centralPanel}>
-                    <View style={styles.slideshowContainer}>
-                        <Image source={{ uri: livePhotos[currentPhoto] || PHOTOS[0] }} style={styles.mainPhoto} />
-                        {/* Caption removed as per request */}
-                    </View>
-                </View>
+                            {!loading && leaderboard.length === 0 && (
+                                <Text style={styles.emptyLead}>¡Que empiece el juego!</Text>
+                            )}
+
+                            <View style={styles.rankList}>
+                                {currentLeaderboard.map((item, localIdx) => {
+                                    const globalIdx = startIdx + localIdx;
+                                    return (
+                                        <View key={item.id || globalIdx} style={[
+                                            styles.rankItem,
+                                            globalIdx === 0 && styles.rankItemGold
+                                        ]}>
+                                            <View style={styles.rankLeft}>
+                                                <Text style={[styles.rankNum, globalIdx === 0 && { color: 'black' }]}>
+                                                    #{globalIdx + 1}
+                                                </Text>
+                                                <Image source={{ uri: item.avatar || `https://ui-avatars.com/api/?name=${item.name}&background=random` }} style={styles.miniAvatar} />
+                                                <Text numberOfLines={1} style={[styles.rankName, globalIdx === 0 && { color: 'black', fontFamily: Fonts.bold }]}>
+                                                    {item.name}
+                                                </Text>
+                                            </View>
+                                            <View style={[styles.rankRight, globalIdx === 0 && { backgroundColor: 'rgba(0,0,0,0.1)' }]}>
+                                                <Text style={[styles.rankPts, globalIdx === 0 && { color: 'black' }]}>
+                                                    {item.points.toLocaleString()}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+
+                            {leaderboard.length > ITEMS_PER_PAGE && (
+                                <View style={styles.moreIndicator}>
+                                    <Text style={styles.moreText}>MÁS POSICIONES ABAJO...</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {/* 2. Middle: Dynamic Photo Slideshow */}
+                        <View style={styles.centralPanel}>
+                            <View style={styles.slideshowContainer}>
+                                {livePhotos.length > 0 ? (
+                                    <Image source={{ uri: livePhotos[currentPhoto] }} style={styles.mainPhoto} />
+                                ) : (
+                                    <View style={[styles.mainPhoto, { backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' }]}>
+                                        <FontAwesome name="image" size={80} color="#333" />
+                                        <Text style={{ color: '#444', marginTop: 20, fontFamily: Fonts.bold }}>ESTAMOS ESPERANDO TU FOTO...</Text>
+                                    </View>
+                                )}
+                            </View>
+                        </View>
 
 
-                {/* 3. Right: QR + Social Wall (Santi no es Santi) */}
-                <View style={styles.rightSidebar}>
-                    <View style={styles.qrSection}>
-                        <Text style={styles.qrTitle}>{configs.branding || 'SANTI MEDINA'}</Text>
-                        <Text style={[styles.qrTitle, { fontSize: 18, marginTop: -15, color: 'rgba(0,0,0,0.6)' }]}>EXPERIENCIA INTERACTIVA</Text>
-                        <View style={styles.qrBox}>
-                            <Image
-                                source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent('https://santiagomedina.com.ar/')}` }}
-                                style={styles.qrImage}
-                            />
-                        </View>
-                        <View style={styles.qrArrowContainer}>
-                            <FontAwesome name="mobile-phone" size={28} color="black" />
-                            <Text style={styles.qrFooter}>ESCANEÁ PARA JUGAR</Text>
-                        </View>
-                    </View>
+                        {/* 3. Right: QR + Social Wall (Santi no es Santi) */}
+                        <View style={styles.rightSidebar}>
+                            <View style={styles.qrSection}>
+                                <Text style={styles.qrTitle}>{configs.branding || 'SANTI MEDINA'}</Text>
+                                <Text style={[styles.qrTitle, { fontSize: 18, marginTop: -15, color: 'rgba(0,0,0,0.6)' }]}>EXPERIENCIA INTERACTIVA</Text>
+                                <View style={styles.qrBox}>
+                                    <Image
+                                        source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent('https://santiagomedina.com.ar/')}` }}
+                                        style={styles.qrImage}
+                                    />
+                                </View>
+                                <View style={styles.qrArrowContainer}>
+                                    <FontAwesome name="mobile-phone" size={28} color="black" />
+                                    <Text style={styles.qrFooter}>ESCANEÁ PARA JUGAR</Text>
+                                </View>
+                            </View>
 
-                    <View style={styles.socialCard}>
-                        <View style={styles.socialHeader}>
-                            <FontAwesome name="commenting" size={28} color={Colors.river.primary} />
-                            <Text style={styles.socialTitle}>{configs.social_title || 'SANTI NO ES SANTI SIN...'}</Text>
+                            <View style={styles.socialCard}>
+                                <View style={styles.socialHeader}>
+                                    <FontAwesome name="commenting" size={28} color={Colors.river.primary} />
+                                    <Text style={styles.socialTitle}>{configs.social_title || 'SANTI NO ES SANTI SIN...'}</Text>
+                                </View>
+                                <View style={styles.messageBox}>
+                                    {liveMessages.length > 0 ? (
+                                        <Text style={styles.socialMessage}>"{liveMessages[currentMsg]}"</Text>
+                                    ) : (
+                                        <Text style={[styles.socialMessage, { color: '#444', fontSize: 18 }]}>¡ENVIÁ TU MENSAJE PARA SANTI!</Text>
+                                    )}
+                                </View>
+                                <View style={styles.socialGlow} />
+                            </View>
                         </View>
-                        <View style={styles.messageBox}>
-                            <Text style={styles.socialMessage}>"{liveMessages[currentMsg] || MESSAGES[0]}"</Text>
-                        </View>
-                        <View style={styles.socialGlow} />
-                    </View>
-                </View>
 
                     </View>
 
