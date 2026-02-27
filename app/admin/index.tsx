@@ -14,6 +14,7 @@ import {
     addTriviaQuestion,
     addTriviaVideo,
     auth,
+    deleteAllSocialMessages,
     deleteHomenaje,
     deleteMedia,
     deleteMessage,
@@ -33,6 +34,7 @@ import {
     subscribeToTriviaQuestions,
     subscribeToTriviaVideos,
     syncBookFromDriveFolder,
+    unpublishAllMedia,
     updateHomenaje,
     updateMedia,
     updateMessage,
@@ -142,6 +144,11 @@ export default function AdminPanel() {
     // Forms State
     const [newsText, setNewsText] = useState('');
     const [newsType, setNewsType] = useState<NewsAlert['type']>('INFO');
+    const [editingNews, setEditingNews] = useState<NewsAlert | null>(null);
+    const [newsEditId, setNewsEditId] = useState('');
+    const [newsEditText, setNewsEditText] = useState('');
+    const [newsEditType, setNewsEditType] = useState<NewsAlert['type']>('INFO');
+    const [deletingNewsId, setDeletingNewsId] = useState<string | null>(null);
     const [homTitle, setHomTitle] = useState('');
     const [homYoutube, setHomYoutube] = useState('');
     const [homOrder, setHomOrder] = useState('');
@@ -334,20 +341,45 @@ export default function AdminPanel() {
         }
     };
 
-    const handleDeleteNews = (id: string) => {
-        Alert.alert("Confirmar", "¿Borrar noticia?", [
-            { text: "No" },
-            {
-                text: "Sí",
-                onPress: async () => {
-                    try {
-                        await deleteNews(id);
-                    } catch (e: any) {
-                        Alert.alert("Error al borrar", e?.message ?? "No se pudo borrar la noticia.");
-                    }
-                },
-            },
-        ]);
+    const handleEditNews = (n: NewsAlert) => {
+        if (!n.id) return;
+        setEditingNews(n);
+        setNewsEditId(n.id);
+        setNewsEditText(n.text);
+        setNewsEditType(n.type);
+    };
+
+    const handleSaveEditNews = async () => {
+        if (!newsEditId || !newsEditText.trim()) {
+            Alert.alert("Error", "El texto de la noticia es obligatorio.");
+            return;
+        }
+        setIsLoading(true);
+        try {
+            await updateNews(newsEditId, {
+                text: newsEditText.trim(),
+                type: newsEditType,
+            });
+            setEditingNews(null);
+            Alert.alert("Éxito", "Noticia actualizada");
+        } catch (e: any) {
+            Alert.alert("Error", "No se pudo actualizar la noticia");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const confirmDeleteNews = async () => {
+        if (!deletingNewsId) return;
+        setIsLoading(true);
+        try {
+            await deleteNews(deletingNewsId);
+            setDeletingNewsId(null);
+        } catch (e: any) {
+            Alert.alert("Error al borrar", e?.message ?? "No se pudo borrar la noticia.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleAddHomenaje = async () => {
@@ -849,6 +881,66 @@ export default function AdminPanel() {
                 {currentView === 'NEWS' && (
                     <View style={styles.section}>
                         {renderHeader('GESTIÓN DE NOTICIAS')}
+
+                        {/* Modal Borrar Noticia */}
+                        <Modal visible={!!deletingNewsId} transparent animationType="fade">
+                            <View style={styles.modalOverlay}>
+                                <View style={[styles.modalBox, { borderColor: '#c00' }]}>
+                                    <Text style={styles.modalTitle}>¿Borrar esta noticia?</Text>
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => setDeletingNewsId(null)} disabled={isLoading}>
+                                            <Text style={styles.addBtnText}>NO</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginBottom: 0 }]} onPress={confirmDeleteNews} disabled={isLoading}>
+                                            <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                        </Modal>
+
+                        {/* Modal Editar Noticia */}
+                        <Modal visible={!!editingNews} transparent animationType="fade">
+                            <View style={styles.modalOverlay}>
+                                <View style={styles.modalBox}>
+                                    <Text style={styles.modalTitle}>Editar Noticia</Text>
+                                    <TextInput
+                                        style={styles.inputField}
+                                        placeholder="Texto de la noticia..."
+                                        value={newsEditText}
+                                        onChangeText={setNewsEditText}
+                                    />
+                                    <View style={styles.typeRow}>
+                                        {['INFO', 'ALERTA', 'ULTIMO MOMENTO', 'URGENTE'].map((t) => (
+                                            <TouchableOpacity
+                                                key={t}
+                                                style={[styles.typeMiniBtn, newsEditType === t && styles.typeMiniBtnActive]}
+                                                onPress={() => setNewsEditType(t as any)}
+                                            >
+                                                <Text style={styles.typeMiniText}>{t}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity
+                                            style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]}
+                                            onPress={() => setEditingNews(null)}
+                                            disabled={isLoading}
+                                        >
+                                            <Text style={styles.addBtnText}>CANCELAR</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.addBtn, { marginBottom: 0 }]}
+                                            onPress={handleSaveEditNews}
+                                            disabled={isLoading}
+                                        >
+                                            <Text style={styles.addBtnText}>GUARDAR</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                        </Modal>
+
                         <TextInput style={styles.inputField} placeholder="Texto de la noticia..." value={newsText} onChangeText={setNewsText} />
                         <View style={styles.typeRow}>
                             {['INFO', 'ALERTA', 'ULTIMO MOMENTO', 'URGENTE'].map((t) => (
@@ -869,7 +961,10 @@ export default function AdminPanel() {
                                     onValueChange={(v) => updateNews(n.id!, { visible: v })}
                                     trackColor={{ false: '#767577', true: Colors.elegant.gold }}
                                 />
-                                <TouchableOpacity onPress={() => handleDeleteNews(n.id!)} style={{ marginLeft: 15 }}>
+                                <TouchableOpacity onPress={() => handleEditNews(n)} style={{ marginLeft: 15 }}>
+                                    <FontAwesome name="pencil" size={18} color={Colors.elegant.gold} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setDeletingNewsId(n.id!)} style={{ marginLeft: 15 }}>
                                     <FontAwesome name="trash" size={18} color="red" />
                                 </TouchableOpacity>
                             </View>
@@ -1325,6 +1420,44 @@ export default function AdminPanel() {
                         {renderHeader('PELIGRO')}
                         <TouchableOpacity style={styles.dangerBtn} onPress={resetRanking}>
                             <Text style={styles.dangerBtnText}>REINICIAR RANKING (PUNTAJES)</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.dangerBtn, { marginTop: 20, backgroundColor: '#8b0000' }]}
+                            onPress={async () => {
+                                Alert.alert("Confirmar", "¿Despublicar todas las fotos de la galería?", [
+                                    { text: "No" },
+                                    {
+                                        text: "Sí", onPress: async () => {
+                                            setIsLoading(true);
+                                            try { await unpublishAllMedia(); Alert.alert("Listo", "Galería despublicada."); }
+                                            catch (e) { Alert.alert("Error", "No se pudo despublicar."); }
+                                            finally { setIsLoading(false); }
+                                        }
+                                    }
+                                ]);
+                            }}
+                        >
+                            <Text style={styles.dangerBtnText}>DESPUBLICAR TODAS LAS FOTOS</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.dangerBtn, { marginTop: 20, backgroundColor: '#c00' }]}
+                            onPress={async () => {
+                                Alert.alert("Confirmar", "¿BORRAR TODOS los mensajes de 'Santi no es Santi'?", [
+                                    { text: "No" },
+                                    {
+                                        text: "Sí, BORRAR TODO", onPress: async () => {
+                                            setIsLoading(true);
+                                            try { await deleteAllSocialMessages(); Alert.alert("Listo", "Mensajes borrados."); }
+                                            catch (e) { Alert.alert("Error", "No se pudo borrar."); }
+                                            finally { setIsLoading(false); }
+                                        }
+                                    }
+                                ]);
+                            }}
+                        >
+                            <Text style={styles.dangerBtnText}>BORRAR TODOS LOS MENSAJES</Text>
                         </TouchableOpacity>
                     </View>
                 )}

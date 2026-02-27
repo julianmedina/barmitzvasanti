@@ -52,7 +52,7 @@ export default function HomeScreen() {
           <Text style={styles.menuText}>Santi no es Santi sin</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/selfie/index')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/selfie')}>
           <View style={[styles.iconCircle, { backgroundColor: '#FF4081' }]}>
             <FontAwesome name="camera" size={30} color="white" />
           </View>

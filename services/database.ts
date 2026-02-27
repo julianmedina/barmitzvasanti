@@ -767,3 +767,35 @@ export const subscribeToMissionAssignment = (
         }
     });
 };
+
+/** Despublica (visible: false) todas las fotos/videos de la galería. */
+export const unpublishAllMedia = async () => {
+    try {
+        const q = query(collection(db, 'media'));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((d) => {
+            batch.update(d.ref, { visible: false });
+        });
+        await batch.commit();
+    } catch (e) {
+        console.error("unpublishAllMedia", e);
+        throw e;
+    }
+};
+
+/** Borra todos los mensajes de 'Santi no es Santi'. */
+export const deleteAllSocialMessages = async () => {
+    try {
+        const q = query(collection(db, 'messages'));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach((d) => {
+            batch.delete(d.ref);
+        });
+        await batch.commit();
+    } catch (e) {
+        console.error("deleteAllSocialMessages", e);
+        throw e;
+    }
+};

@@ -8,6 +8,7 @@ import {
     uploadMediaFile,
 } from '@/services/database';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { Video } from 'expo-av';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { shareAsync } from 'expo-sharing';
@@ -21,7 +22,6 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Video } from 'expo-av';
 
 type CaptureMode = 'photo' | 'video';
 
@@ -232,8 +232,8 @@ export default function CameraScreen() {
                             style={[styles.actionBtn, styles.primaryActionBtn]}
                             onPress={uploadAndComplete}
                         >
-                            <FontAwesome name="check-circle" size={20} color="white" style={{ marginRight: 8 }} />
-                            <Text style={styles.btnText}>Subir y cumplir</Text>
+                            <FontAwesome name="check-square" size={20} color="white" style={{ marginRight: 8 }} />
+                            <Text style={styles.btnText}>COMPLETAR Y SUBIR</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#555' }]} onPress={retake}>
                             <Text style={styles.btnText}>Nueva</Text>
