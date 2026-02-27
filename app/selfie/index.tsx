@@ -28,13 +28,17 @@ export default function SelfieScreen() {
     const [countdown, setCountdown] = useState<number | null>(null);
     const [cameraReady, setCameraReady] = useState(false);
     const cameraRef = useRef<CameraView>(null);
-    const takePictureRef = useRef<() => Promise<void>>(() => { });
+    const takePictureRef = useRef<(() => Promise<void>) | null>(null);
     const previewShotRef = useRef<View>(null);
     const router = useRouter();
 
     if (!permission) {
         // Camera permissions are still loading.
-        return <View style={styles.container} />;
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Colors.elegant.gold} />
+            </View>
+        );
     }
 
     if (!permission.granted) {
@@ -100,7 +104,7 @@ export default function SelfieScreen() {
         if (countdown === null) return;
         if (countdown === 0) {
             setCountdown(null);
-            takePictureRef.current();
+            takePictureRef.current?.();
             return;
         }
         const id = setTimeout(() => setCountdown(countdown - 1), 1000);
@@ -171,13 +175,26 @@ export default function SelfieScreen() {
             }} />
 
             {!photo ? (
-                <View style={styles.cameraContainer}>
+                <View style={{ flex: 1 }}>
                     <CameraView
                         ref={cameraRef}
                         style={styles.camera}
                         facing={facing}
-                        onCameraReady={() => setTimeout(() => setCameraReady(true), 500)}
+                        onCameraReady={() => {
+                            console.warn("Camera ready event fired");
+                            setTimeout(() => setCameraReady(true), 500);
+                        }}
+                        onMountError={(error) => {
+                            console.error("Camera mount error:", error);
+                            Alert.alert("Error de cámara", "No se pudo montar la cámara: " + error.message);
+                        }}
                     >
+                        {!cameraReady && (
+                            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' }]}>
+                                <ActivityIndicator size="large" color={Colors.elegant.gold} />
+                                <Text style={{ color: 'white', marginTop: 10 }}>Iniciando cámara...</Text>
+                            </View>
+                        )}
                         {/* Overlay de marca: Bar Mitzvá de SANTI MEDINA (tipografía y colores del login/home) */}
                         <View style={styles.brandOverlay} pointerEvents="none">
                             <Text style={styles.brandLine1}>Bar Mitzvá de</Text>
@@ -223,7 +240,7 @@ export default function SelfieScreen() {
                         style={styles.previewShotWrapper}
                         collapsable={false}
                     >
-                        <Image source={{ uri: photo }} style={styles.previewImage} />
+                        {photo && <Image source={{ uri: photo }} style={styles.previewImage} />}
                         <View style={styles.brandOverlayOnPreview}>
                             <Text style={styles.brandLine1OnPreview}>Bar Mitzvá de</Text>
                             <Text style={styles.brandLine2OnPreview}>SANTI MEDINA</Text>
@@ -308,6 +325,8 @@ const styles = StyleSheet.create({
     },
     camera: {
         flex: 1,
+        width: '100%',
+        height: '100%',
     },
     brandOverlay: {
         position: 'absolute',

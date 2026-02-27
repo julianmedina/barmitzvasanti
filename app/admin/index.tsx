@@ -198,6 +198,8 @@ export default function AdminPanel() {
     const [editingMission, setEditingMission] = useState<Mission | null>(null);
     const [missionSeedMessage, setMissionSeedMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
     const [deletingMissionId, setDeletingMissionId] = useState<string | null>(null);
+    const [confirmingDangerAction, setConfirmingDangerAction] = useState<'unpublishMedia' | 'deleteMessages' | 'resetRanking' | null>(null);
+    const [dangerResultMessage, setDangerResultMessage] = useState<string | null>(null);
 
     const sortedHomenajesFromSubscription = useMemo(
         () => [...homenajesList].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
@@ -1418,49 +1420,79 @@ export default function AdminPanel() {
                 {currentView === 'DANGER' && (
                     <View style={styles.section}>
                         {renderHeader('PELIGRO')}
-                        <TouchableOpacity style={styles.dangerBtn} onPress={resetRanking}>
+                        <TouchableOpacity style={styles.dangerBtn} onPress={() => setConfirmingDangerAction('resetRanking')}>
                             <Text style={styles.dangerBtnText}>REINICIAR RANKING (PUNTAJES)</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.dangerBtn, { marginTop: 20, backgroundColor: '#8b0000' }]}
-                            onPress={async () => {
-                                Alert.alert("Confirmar", "¿Despublicar todas las fotos de la galería?", [
-                                    { text: "No" },
-                                    {
-                                        text: "Sí", onPress: async () => {
-                                            setIsLoading(true);
-                                            try { await unpublishAllMedia(); Alert.alert("Listo", "Galería despublicada."); }
-                                            catch (e) { Alert.alert("Error", "No se pudo despublicar."); }
-                                            finally { setIsLoading(false); }
-                                        }
-                                    }
-                                ]);
-                            }}
+                            onPress={() => setConfirmingDangerAction('unpublishMedia')}
                         >
                             <Text style={styles.dangerBtnText}>DESPUBLICAR TODAS LAS FOTOS</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.dangerBtn, { marginTop: 20, backgroundColor: '#c00' }]}
-                            onPress={async () => {
-                                Alert.alert("Confirmar", "¿BORRAR TODOS los mensajes de 'Santi no es Santi'?", [
-                                    { text: "No" },
-                                    {
-                                        text: "Sí, BORRAR TODO", onPress: async () => {
-                                            setIsLoading(true);
-                                            try { await deleteAllSocialMessages(); Alert.alert("Listo", "Mensajes borrados."); }
-                                            catch (e) { Alert.alert("Error", "No se pudo borrar."); }
-                                            finally { setIsLoading(false); }
-                                        }
-                                    }
-                                ]);
-                            }}
+                            onPress={() => setConfirmingDangerAction('deleteMessages')}
                         >
                             <Text style={styles.dangerBtnText}>BORRAR TODOS LOS MENSAJES</Text>
                         </TouchableOpacity>
                     </View>
                 )}
+
+                <Modal visible={confirmingDangerAction !== null || dangerResultMessage !== null} transparent animationType="fade">
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalBox}>
+                            {dangerResultMessage ? (
+                                <>
+                                    <Text style={styles.modalTitle}>Resultado</Text>
+                                    <Text style={{ color: 'white', marginBottom: 20 }}>{dangerResultMessage}</Text>
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity style={styles.saveBtn} onPress={() => setDangerResultMessage(null)}>
+                                            <Text style={styles.saveBtnText}>ACEPTAR</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={styles.modalTitle}>Confirmar acción peligrosa</Text>
+                                    <Text style={{ color: 'white', marginBottom: 20 }}>
+                                        {confirmingDangerAction === 'resetRanking' && "¿Estás seguro de reiniciar TODOS los puntajes?"}
+                                        {confirmingDangerAction === 'unpublishMedia' && "¿Despublicar todas las fotos de la galería?"}
+                                        {confirmingDangerAction === 'deleteMessages' && "¿BORRAR TODOS los mensajes de 'Santi no es Santi'?"}
+                                    </Text>
+
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity style={styles.typeMiniBtn} onPress={() => setConfirmingDangerAction(null)}>
+                                            <Text style={styles.typeMiniText}>CANCELAR</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.typeMiniBtn, { backgroundColor: 'red' }]}
+                                            onPress={async () => {
+                                                const action = confirmingDangerAction;
+                                                setConfirmingDangerAction(null);
+                                                setIsLoading(true);
+                                                try {
+                                                    if (action === 'resetRanking') await resetRanking();
+                                                    else if (action === 'unpublishMedia') await unpublishAllMedia();
+                                                    else if (action === 'deleteMessages') await deleteAllSocialMessages();
+                                                    setDangerResultMessage("Acción completada con éxito.");
+                                                } catch (e) {
+                                                    console.error("Danger action error", e);
+                                                    setDangerResultMessage("Error: No se pudo realizar la acción.");
+                                                } finally {
+                                                    setIsLoading(false);
+                                                }
+                                            }}
+                                        >
+                                            <Text style={styles.typeMiniText}>SÍ, PROCEDER</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+                    </View>
+                </Modal>
             </ScrollView>
         </View>
     );

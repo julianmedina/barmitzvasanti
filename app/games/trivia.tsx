@@ -284,7 +284,7 @@ export default function TriviaGame() {
                             useNativeControls
                             shouldPlay
                             onPlaybackStatusUpdate={(status) => {
-                                if (status.isLoaded && status.didJustFinishAndNotReset) onVideoFinished();
+                                if (status.isLoaded && status.didJustFinish) onVideoFinished();
                             }}
                         />
                     )}
