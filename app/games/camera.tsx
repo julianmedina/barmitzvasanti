@@ -10,6 +10,7 @@ import {
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Video } from 'expo-av';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { shareAsync } from 'expo-sharing';
 import React, { useRef, useState } from 'react';
@@ -23,7 +24,7 @@ import {
     View,
 } from 'react-native';
 
-type CaptureMode = 'photo' | 'video';
+type CaptureMode = 'picture' | 'video';
 
 export default function CameraScreen() {
     const [permission, requestPermission] = useCameraPermissions();
@@ -45,7 +46,7 @@ export default function CameraScreen() {
     }>();
     const router = useRouter();
 
-    const mode: CaptureMode = params.mode === 'video' ? 'video' : 'photo';
+    const mode: CaptureMode = params.mode === 'video' ? 'video' : 'picture';
     const missionId = params.missionId ?? null;
     const completedCount = params.completedCount ? parseInt(params.completedCount, 10) : 0;
     const pointsForThisLevel = getPointsForCompletionLevel(completedCount);
@@ -104,10 +105,7 @@ export default function CameraScreen() {
         try {
             cameraRef.current.stopRecording();
             setIsRecording(false);
-            const result = promise ? await Promise.race([
-                promise,
-                new Promise<{ uri: string } | null>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
-            ]) : null;
+            const result = await promise;
             recordingPromiseRef.current = null;
             if (result?.uri) {
                 setCapturedVideo(result.uri);
@@ -119,6 +117,23 @@ export default function CameraScreen() {
             setIsRecording(false);
             recordingPromiseRef.current = null;
             Alert.alert("Error", "No se pudo guardar el video. Probá de nuevo.");
+        }
+    };
+
+    const pickFromGallery = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permiso", "Necesitamos acceso a la galería.");
+            return;
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: mode === 'video' ? ImagePicker.MediaTypeOptions.Videos : ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            quality: 0.7,
+        });
+        if (!result.canceled && result.assets[0]) {
+            if (mode === 'video') setCapturedVideo(result.assets[0].uri);
+            else setCapturedImage(result.assets[0].uri);
         }
     };
 
@@ -170,6 +185,7 @@ export default function CameraScreen() {
                 url: downloadURL,
                 section: 'camera',
                 userId: user.uid,
+                mimeType: capturedVideo ? 'video/mp4' : 'image/jpeg',
             });
 
             const pointsToAward = missionId ? pointsForThisLevel : 150;
@@ -255,6 +271,7 @@ export default function CameraScreen() {
                 style={styles.camera}
                 ref={cameraRef}
                 facing={facing}
+                mode={mode}
                 onCameraReady={() => setTimeout(() => setCameraReady(true), 300)}
             >
                 <View style={styles.header}>
@@ -277,7 +294,7 @@ export default function CameraScreen() {
                     >
                         <FontAwesome name="refresh" size={24} color="white" />
                     </TouchableOpacity>
-                    {mode === 'photo' ? (
+                    {mode === 'picture' ? (
                         <TouchableOpacity style={styles.captureBtn} onPress={takePicture} disabled={!!countdown}>
                             <View style={styles.innerCircle} />
                         </TouchableOpacity>
@@ -294,7 +311,14 @@ export default function CameraScreen() {
                             )}
                         </TouchableOpacity>
                     )}
-                    <View style={styles.captureBtn} />
+                    {Platform.OS === 'web' ? (
+                        <TouchableOpacity style={styles.galleryBtn} onPress={pickFromGallery}>
+                            <FontAwesome name="folder-open" size={22} color="white" />
+                            <Text style={styles.galleryBtnText}>Subir {mode === 'video' ? 'video' : 'foto'}</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={styles.captureBtn} />
+                    )}
                 </View>
             </CameraView>
         </View>
@@ -455,5 +479,21 @@ const styles = StyleSheet.create({
         color: 'white',
         fontFamily: Fonts.bold,
         fontSize: 14,
+    },
+    galleryBtn: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    galleryBtnText: {
+        color: 'white',
+        fontFamily: Fonts.sans,
+        fontSize: 10,
+        marginTop: 4,
+        textAlign: 'center',
+        paddingHorizontal: 4,
     },
 });
