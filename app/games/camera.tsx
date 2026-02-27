@@ -95,15 +95,15 @@ export default function CameraScreen() {
             setRecordingTime(0);
             recordingTimerRef.current = setInterval(() => {
                 setRecordingTime(prev => {
-                    if (prev >= 10) {
-                        stopRecording(); // Automatically stop if it goes past 10
-                        return 10;
+                    if (prev >= 6) {
+                        stopRecording(); // Automatically stop if it goes past 6
+                        return 6;
                     }
                     return prev + 1;
                 });
             }, 1000);
             recordingPromiseRef.current = null;
-            const promise = cameraRef.current.recordAsync({ maxDuration: 10 });
+            const promise = cameraRef.current.recordAsync({ maxDuration: 6 });
             recordingPromiseRef.current = promise;
         } catch (e) {
             console.error("startRecording", e);
@@ -123,12 +123,8 @@ export default function CameraScreen() {
             const result = await promise;
             recordingPromiseRef.current = null;
             if (result?.uri) {
-                setCapturedVideo(result.uri);
-                if (Platform.OS === 'web') {
-                    window.alert('¡Video grabado! Ahora tocá en "COMPLETAR Y SUBIR" abajo para enviarlo.');
-                } else {
-                    Alert.alert('¡Video grabado!', 'Ahora tocá en "COMPLETAR Y SUBIR" abajo para enviarlo.');
-                }
+                // Para videos, mandamos automáticamente sin pasar por la preview
+                uploadAndComplete(result.uri, true);
             } else {
                 Alert.alert("Error", "No se obtuvo el video. Probá de nuevo.");
             }
@@ -186,27 +182,25 @@ export default function CameraScreen() {
         }
     };
 
-    const uploadAndComplete = async () => {
+    const uploadAndComplete = async (directUri?: string, directIsVideo?: boolean) => {
         const user = auth.currentUser;
         if (!user) {
             Alert.alert("Error", "Debes estar identificado para subir.");
             return;
         }
 
-        const uri = capturedImage || capturedVideo;
+        const uri = typeof directUri === 'string' ? directUri : (capturedImage || capturedVideo);
+        const isVid = typeof directIsVideo === 'boolean' ? directIsVideo : !!capturedVideo;
         if (!uri) return;
 
         setIsUploading(true);
+        setTimeout(() => setIsUploading(false), 2000); // UI unblock fail-safe
+
         try {
-            const ext = capturedVideo ? 'mp4' : 'jpg';
+            const ext = isVid ? 'mp4' : 'jpg';
             const path = `media/camera/${user.uid}/${Date.now()}.${ext}`;
 
             const pointsToAward = missionId ? pointsForThisLevel : 150;
-            if (pointsToAward > 0) await updatePlayerScore(pointsToAward);
-
-            if (missionId) {
-                await completeMission(user.uid, missionId, pointsToAward);
-            }
 
             // Subimos el archivo en background para no trabar la UI (los videos pueden tardar mucho)
             uploadMediaFile(uri, path).then(async (downloadURL) => {
@@ -214,20 +208,29 @@ export default function CameraScreen() {
                     url: downloadURL,
                     section: 'camera',
                     userId: user.uid,
-                    mimeType: capturedVideo ? 'video/mp4' : 'image/jpeg',
+                    mimeType: isVid ? 'video/mp4' : 'image/jpeg',
                 });
             }).catch(e => console.error('Background upload error:', e));
 
-            setIsUploading(false);
+            // Lógica asíncrona para no frenar la interfaz
+            (async () => {
+                try {
+                    if (pointsToAward > 0) await updatePlayerScore(pointsToAward);
+                    if (missionId) await completeMission(user.uid, missionId, pointsToAward);
+                } catch (e) {
+                    console.error("Points award error:", e);
+                }
+            })();
 
             if (missionId) {
                 router.replace('/games/missions?celebrate=1');
             } else {
-                Alert.alert(
-                    "¡Listo!",
-                    "Ganaste 150 puntos.",
-                    [{ text: "¡BUENÍSIMO!", onPress: () => router.navigate('/(tabs)') }]
-                );
+                if (Platform.OS === 'web') {
+                    window.alert("¡Enviando en segundo plano! Ganaste 150 puntos.");
+                } else {
+                    Alert.alert("¡Listo!", "Subiendo de fondo. Ganaste 150 puntos.", [{ text: "¡BUENÍSIMO!", onPress: () => router.navigate('/(tabs)') }]);
+                }
+                if (Platform.OS === 'web') router.navigate('/(tabs)');
             }
         } catch (e) {
             console.error("Upload error:", e);
@@ -273,7 +276,7 @@ export default function CameraScreen() {
                     <View style={styles.controlRow}>
                         <TouchableOpacity
                             style={[styles.actionBtn, styles.primaryActionBtn]}
-                            onPress={uploadAndComplete}
+                            onPress={() => uploadAndComplete()}
                         >
                             <FontAwesome name="check-square" size={20} color="white" style={{ marginRight: 8 }} />
                             <Text style={styles.btnText}>COMPLETAR Y SUBIR</Text>
@@ -332,7 +335,7 @@ export default function CameraScreen() {
                             disabled={!!countdown}
                         >
                             {isRecording ? (
-                                <Text style={styles.stopLabel}>{recordingTime}s / 10s{"\n"}DETENER</Text>
+                                <Text style={[styles.stopLabel, { fontSize: 24, fontWeight: '900', lineHeight: 28 }]}>{recordingTime}s / 6s{"\n"}ENVIAR</Text>
                             ) : (
                                 <View style={styles.recordDot} />
                             )}
