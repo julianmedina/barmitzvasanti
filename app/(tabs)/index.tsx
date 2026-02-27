@@ -87,12 +87,12 @@ export default function HomeScreen() {
           <Text style={styles.menuText}>Trivia</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/games/pacman-lobby')}>
+        {/* <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/games/pacman-lobby')}>
           <View style={[styles.iconCircle, { backgroundColor: '#FFD700' }]}>
             <Text style={{ fontSize: 30 }}>🟡</Text>
           </View>
           <Text style={styles.menuText}>Pacman</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
     </ScrollView>
   );

@@ -49,7 +49,7 @@ export default function GamesScreen() {
                 </View>
             </TouchableOpacity>
 
-            <TouchableOpacity
+{/* <TouchableOpacity
                 style={[styles.card, { backgroundColor: '#FFD700', marginTop: 20 }]}
                 onPress={() => router.push('/games/pacman-lobby')}
             >
@@ -60,7 +60,7 @@ export default function GamesScreen() {
                     <Text style={[styles.gameTitle, { color: 'black' }]}>Pacman Gigante</Text>
                     <Text style={[styles.gameSubtitle, { color: '#333' }]}>¡Multijugador en tiempo real!</Text>
                 </View>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
         </ScrollView>
     );
