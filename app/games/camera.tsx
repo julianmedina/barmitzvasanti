@@ -32,6 +32,8 @@ export default function CameraScreen() {
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
+    const [recordingTime, setRecordingTime] = useState<number>(0);
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [cameraReady, setCameraReady] = useState(false);
@@ -90,12 +92,23 @@ export default function CameraScreen() {
                 await new Promise((r) => setTimeout(r, 400));
             }
             setIsRecording(true);
+            setRecordingTime(0);
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingTime(prev => {
+                    if (prev >= 10) {
+                        stopRecording(); // Automatically stop if it goes past 10
+                        return 10;
+                    }
+                    return prev + 1;
+                });
+            }, 1000);
             recordingPromiseRef.current = null;
             const promise = cameraRef.current.recordAsync({ maxDuration: 10 });
             recordingPromiseRef.current = promise;
         } catch (e) {
             console.error("startRecording", e);
             Alert.alert("Error", "No se pudo iniciar la grabación");
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             setIsRecording(false);
         }
     };
@@ -104,6 +117,7 @@ export default function CameraScreen() {
         if (!cameraRef.current || !isRecording) return;
         const promise = recordingPromiseRef.current;
         try {
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             cameraRef.current.stopRecording();
             setIsRecording(false);
             const result = await promise;
@@ -120,6 +134,7 @@ export default function CameraScreen() {
             }
         } catch (e) {
             console.error("stopRecording", e);
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
             setIsRecording(false);
             recordingPromiseRef.current = null;
             Alert.alert("Error", "No se pudo guardar el video. Probá de nuevo.");
@@ -317,7 +332,7 @@ export default function CameraScreen() {
                             disabled={!!countdown}
                         >
                             {isRecording ? (
-                                <Text style={styles.stopLabel}>DETENER</Text>
+                                <Text style={styles.stopLabel}>{recordingTime}s / 10s{"\n"}DETENER</Text>
                             ) : (
                                 <View style={styles.recordDot} />
                             )}
