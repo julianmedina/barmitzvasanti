@@ -144,18 +144,27 @@ export default function SelfieScreen() {
                 userId: userId,
             });
 
-            Alert.alert(
-                "¡Éxito!",
-                "Tu selfie se subió correctamente. ¡Buscate en el Dashboard!",
-                [{ text: "OK", onPress: () => router.back() }]
-            );
+            if (Platform.OS === 'web') {
+                window.alert("¡Éxito! Tu selfie se subió correctamente. ¡Buscate en el Dashboard!");
+                router.replace('/(tabs)');
+            } else {
+                Alert.alert(
+                    "¡Éxito!",
+                    "Tu selfie se subió correctamente. ¡Buscate en el Dashboard!",
+                    [{ text: "OK", onPress: () => router.replace('/(tabs)') }]
+                );
+            }
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
             console.error("Error in confirmPicture:", error);
-            Alert.alert(
-                "Error al subir la foto",
-                "No se pudo subir la selfie. Revisá que tengas conexión a internet y permisos de la app. Reintentá en un momento.\n\nDetalle: " + message
-            );
+            if (Platform.OS === 'web') {
+                window.alert("Error al subir la foto: No se pudo subir. Revisá que tengas conexión. " + message);
+            } else {
+                Alert.alert(
+                    "Error al subir la foto",
+                    "No se pudo subir la selfie. Revisá que tengas conexión a internet y permisos de la app. Reintentá en un momento.\n\nDetalle: " + message
+                );
+            }
         } finally {
             setIsUploading(false);
         }

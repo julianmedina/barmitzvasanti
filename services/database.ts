@@ -127,6 +127,7 @@ export interface Mission {
     type?: string; // primo, tío, amigo, familiar, etc.
     icon?: string; // emoji o URL de ícono
     imageUrl?: string;
+    videoUrl?: string; // url de video en firebase u otro sitio
     order: number;
     active: boolean;
     prize?: string;
