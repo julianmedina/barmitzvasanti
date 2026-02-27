@@ -18,6 +18,7 @@ import {
     ActivityIndicator,
     Alert,
     Image,
+    Platform,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -179,20 +180,27 @@ export default function CameraScreen() {
         try {
             const ext = capturedVideo ? 'mp4' : 'jpg';
             const path = `media/camera/${user.uid}/${Date.now()}.${ext}`;
-            const downloadURL = await uploadMediaFile(uri, path);
-
-            await saveMediaMetadata({
-                url: downloadURL,
-                section: 'camera',
-                userId: user.uid,
-                mimeType: capturedVideo ? 'video/mp4' : 'image/jpeg',
-            });
 
             const pointsToAward = missionId ? pointsForThisLevel : 150;
             if (pointsToAward > 0) await updatePlayerScore(pointsToAward);
 
             if (missionId) {
                 await completeMission(user.uid, missionId, pointsToAward);
+            }
+
+            // Subimos el archivo en background para no trabar la UI (los videos pueden tardar mucho)
+            uploadMediaFile(uri, path).then(async (downloadURL) => {
+                await saveMediaMetadata({
+                    url: downloadURL,
+                    section: 'camera',
+                    userId: user.uid,
+                    mimeType: capturedVideo ? 'video/mp4' : 'image/jpeg',
+                });
+            }).catch(e => console.error('Background upload error:', e));
+
+            setIsUploading(false);
+
+            if (missionId) {
                 router.replace('/games/missions?celebrate=1');
             } else {
                 Alert.alert(
@@ -204,7 +212,6 @@ export default function CameraScreen() {
         } catch (e) {
             console.error("Upload error:", e);
             Alert.alert("Error", "No se pudo subir.");
-        } finally {
             setIsUploading(false);
         }
     };
@@ -311,13 +318,13 @@ export default function CameraScreen() {
                             )}
                         </TouchableOpacity>
                     )}
-                    {Platform.OS === 'web' ? (
+                    {Platform.OS === 'web' && mode === 'picture' ? (
                         <TouchableOpacity style={styles.galleryBtn} onPress={pickFromGallery}>
                             <FontAwesome name="folder-open" size={22} color="white" />
-                            <Text style={styles.galleryBtnText}>Subir {mode === 'video' ? 'video' : 'foto'}</Text>
+                            <Text style={styles.galleryBtnText}>Subir foto</Text>
                         </TouchableOpacity>
                     ) : (
-                        <View style={styles.captureBtn} />
+                        <View style={[styles.captureBtn, { backgroundColor: 'transparent', borderWidth: 0 }]} />
                     )}
                 </View>
             </CameraView>

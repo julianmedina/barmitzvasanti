@@ -32,33 +32,6 @@ export default function SelfieScreen() {
     const previewShotRef = useRef<View>(null);
     const router = useRouter();
 
-    if (!permission) {
-        // Camera permissions are still loading.
-        return (
-            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={Colors.elegant.gold} />
-            </View>
-        );
-    }
-
-    if (!permission.granted) {
-        return (
-            <View style={styles.container}>
-                <Stack.Screen options={{ title: 'Selfie', headerTransparent: true, headerTintColor: 'white' }} />
-                <View style={styles.messageContainer}>
-                    <FontAwesome5 name="camera" size={50} color={Colors.elegant.gold} />
-                    <Text style={styles.messageText}>Necesitamos acceso a tu cámara para la selfie.</Text>
-                    {Platform.OS === 'web' && (
-                        <Text style={styles.messageSubtext}>Si estás en el navegador y la cámara no funciona, después de dar permiso podés usar "Elegir foto" para subir una imagen.</Text>
-                    )}
-                    <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-                        <Text style={styles.permissionButtonText}>DAR PERMISO</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        );
-    }
-
     const takePicture = async () => {
         if (cameraRef.current) {
             try {
@@ -110,6 +83,34 @@ export default function SelfieScreen() {
         const id = setTimeout(() => setCountdown(countdown - 1), 1000);
         return () => clearTimeout(id);
     }, [countdown]);
+
+    if (!permission) {
+        // Camera permissions are still loading.
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color={Colors.elegant.gold} />
+            </View>
+        );
+    }
+
+    if (!permission.granted) {
+        return (
+            <View style={styles.container}>
+                <Stack.Screen options={{ title: 'Selfie', headerTransparent: true, headerTintColor: 'white' }} />
+                <View style={styles.messageContainer}>
+                    <FontAwesome5 name="camera" size={50} color={Colors.elegant.gold} />
+                    <Text style={styles.messageText}>Necesitamos acceso a tu cámara para la selfie.</Text>
+                    {Platform.OS === 'web' && (
+                        <Text style={styles.messageSubtext}>Si estás en el navegador y la cámara no funciona, después de dar permiso podés usar "Elegir foto" para subir una imagen.</Text>
+                    )}
+                    <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+                        <Text style={styles.permissionButtonText}>DAR PERMISO</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        );
+    }
+
 
     const confirmPicture = async () => {
         if (!photo) return;

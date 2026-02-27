@@ -1361,7 +1361,8 @@ export default function AdminPanel() {
                                         <Text style={styles.modalTitle}>Editar misión</Text>
                                         <TextInput style={styles.inputField} placeholder="Título de la misión *" value={missionTitle} onChangeText={setMissionTitle} />
                                         <TextInput style={styles.inputField} placeholder="Descripción" value={missionDesc} onChangeText={setMissionDesc} />
-                                        <TextInput style={styles.inputField} placeholder="Tipo (primo, tío, amigo...)" value={missionType} onChangeText={setMissionType} />
+                                        <Text style={{ color: '#aaa', fontSize: 10, marginLeft: 4, marginBottom: 2 }}>* Para pedir video, escribí "video" en este campo.</Text>
+                                        <TextInput style={styles.inputField} placeholder="Tipo (escribí 'video' para pedir video)" value={missionType} onChangeText={setMissionType} />
                                         <TextInput style={styles.inputField} placeholder="Ícono (emoji ej. 📸)" value={missionIcon} onChangeText={setMissionIcon} />
                                         <TextInput style={styles.inputField} placeholder="Orden (número)" value={missionOrder} onChangeText={setMissionOrder} keyboardType="numeric" />
                                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
@@ -1386,7 +1387,8 @@ export default function AdminPanel() {
                         <Text style={[styles.inputLabel, { marginTop: 12 }]}>Nueva misión</Text>
                         <TextInput style={styles.inputField} placeholder="Título de la misión *" value={missionTitle} onChangeText={setMissionTitle} />
                         <TextInput style={styles.inputField} placeholder="Descripción" value={missionDesc} onChangeText={setMissionDesc} />
-                        <TextInput style={styles.inputField} placeholder="Tipo (primo, tío, amigo, familiar...)" value={missionType} onChangeText={setMissionType} />
+                        <Text style={{ color: '#aaa', fontSize: 10, marginLeft: 4, marginBottom: 2 }}>* Para pedir video, escribí "video" devuelta en Tipo. Para foto, escribí otra cosa (ej. primo).</Text>
+                        <TextInput style={styles.inputField} placeholder="Tipo (escribí 'video' para pedir video)" value={missionType} onChangeText={setMissionType} />
                         <TextInput style={styles.inputField} placeholder="Ícono (emoji ej. 📸)" value={missionIcon} onChangeText={setMissionIcon} />
                         <TextInput style={styles.inputField} placeholder="Orden (número)" value={missionOrder} onChangeText={setMissionOrder} keyboardType="numeric" />
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
