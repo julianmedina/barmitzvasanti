@@ -3,6 +3,7 @@ import {
     Mission,
     auth,
     ensureUserMissionAssignment,
+    skipMission,
     subscribeToCurrentUserScore,
     subscribeToMissionAssignment,
     subscribeToMissions,
@@ -28,7 +29,9 @@ export default function MissionsScreen() {
     const [poolMissions, setPoolMissions] = useState<Mission[]>([]);
     const [assignmentIds, setAssignmentIds] = useState<string[] | null>(null);
     const [completedIds, setCompletedIds] = useState<string[]>([]);
+    const [skippedIds, setSkippedIds] = useState<string[]>([]);
     const [userPoints, setUserPoints] = useState(0);
+    const [skippingId, setSkippingId] = useState<string | null>(null);
     const [showCelebration, setShowCelebration] = useState(false);
     const ensuredOnce = useRef(false);
     const scaleCelebration = useRef(new Animated.Value(0)).current;
@@ -59,9 +62,10 @@ export default function MissionsScreen() {
         const unsubA = subscribeToMissionAssignment(userId, (assignment) => {
             setAssignmentIds(assignment?.missionIds ?? null);
         });
-        const unsubP = subscribeToUserMissionProgress(userId, (progress) =>
-            setCompletedIds(progress?.completedMissionIds ?? [])
-        );
+        const unsubP = subscribeToUserMissionProgress(userId, (progress) => {
+            setCompletedIds(progress?.completedMissionIds ?? []);
+            setSkippedIds(progress?.skippedMissionIds ?? []);
+        });
         const unsubScore = subscribeToCurrentUserScore(userId, setUserPoints);
         return () => {
             unsubA();
@@ -85,11 +89,25 @@ export default function MissionsScreen() {
             .map((id) => poolMissions.find((m) => m.id === id))
             .filter((m): m is Mission => Boolean(m))
         : [];
-    const currentIndex = myMissions.findIndex((m) => m.id && !completedIds.includes(m.id));
-    const allCompleted = myMissions.length > 0 && currentIndex < 0;
+    const currentIndex = myMissions.findIndex(
+        (m) => m.id && !completedIds.includes(m.id) && !skippedIds.includes(m.id)
+    );
+    const allResolved = myMissions.length > 0 && (completedIds.length + skippedIds.length) >= myMissions.length;
     const currentMission =
-        currentIndex >= 0 ? myMissions[currentIndex] : (allCompleted ? null : myMissions[myMissions.length - 1]);
+        currentIndex >= 0 ? myMissions[currentIndex] : (allResolved ? null : myMissions[myMissions.length - 1]);
     const isVideoMission = currentMission?.type === 'video';
+
+    const handleSkipMission = async () => {
+        if (!currentMission?.id || !userId || skippingId) return;
+        setSkippingId(currentMission.id);
+        try {
+            await skipMission(userId, currentMission.id);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSkippingId(null);
+        }
+    };
 
     const runCelebration = () => {
         setShowCelebration(true);
@@ -143,28 +161,38 @@ export default function MissionsScreen() {
                 <View style={styles.backBtn} />
             </View>
 
-            {/* Progreso: X / 13 + puntos integrados */}
+            {/* 13 boxes: ✓ completada, ✗ salteada, vacío pendiente */}
             <View style={styles.progressBlock}>
-                <Text style={styles.progressBig}>
-                    {completedIds.length} <Text style={styles.progressSlash}>/</Text> {TOTAL_MISSIONS}
-                </Text>
-                <Text style={styles.progressLabel}>misiones completadas</Text>
                 <Text style={styles.progressPoints}>{userPoints.toLocaleString('es-AR')} puntos</Text>
-                <View style={styles.dotsRow}>
-                    {Array.from({ length: TOTAL_MISSIONS }).map((_, i) => (
-                        <View
-                            key={i}
-                            style={[
-                                styles.dot,
-                                i < completedIds.length && styles.dotDone,
-                            ]}
-                        />
-                    ))}
+                <View style={styles.boxesRow}>
+                    {myMissions.slice(0, TOTAL_MISSIONS).map((mission, i) => {
+                        const completed = mission.id && completedIds.includes(mission.id);
+                        const skipped = mission.id && skippedIds.includes(mission.id);
+                        return (
+                            <View
+                                key={mission.id ?? i}
+                                style={[
+                                    styles.missionBox,
+                                    completed && styles.missionBoxDone,
+                                    skipped && styles.missionBoxSkipped,
+                                    mission.id === currentMission?.id && styles.missionBoxCurrent,
+                                ]}
+                            >
+                                {completed ? (
+                                    <FontAwesome name="check" size={18} color="#2ECC71" />
+                                ) : skipped ? (
+                                    <FontAwesome name="times" size={18} color="#E74C3C" />
+                                ) : (
+                                    <Text style={styles.missionBoxNum}>{i + 1}</Text>
+                                )}
+                            </View>
+                        );
+                    })}
                 </View>
             </View>
 
-            {/* Misión actual: solo ícono + título (1 línea), sin scroll */}
-            {currentMission && !allCompleted && (
+            {/* Misión actual: completar o saltear */}
+            {currentMission && !allResolved && (
                 <View style={styles.currentBlock}>
                     <View style={styles.currentRow}>
                         <Text style={styles.currentIcon}>{currentMission.icon ?? '🎯'}</Text>
@@ -172,23 +200,33 @@ export default function MissionsScreen() {
                             {currentMission.title}
                         </Text>
                     </View>
-                    <TouchableOpacity
-                        style={styles.cameraButton}
-                        onPress={handleOpenCamera}
-                        activeOpacity={0.8}
-                    >
-                        {isVideoMission ? (
-                            <>
-                                <FontAwesome name="video-camera" size={22} color="white" style={styles.btnIcon} />
-                                <Text style={styles.cameraButtonText}>Grabar video</Text>
-                            </>
-                        ) : (
-                            <>
-                                <FontAwesome name="camera" size={22} color="white" style={styles.btnIcon} />
-                                <Text style={styles.cameraButtonText}>Sacar foto</Text>
-                            </>
-                        )}
-                    </TouchableOpacity>
+                    <View style={styles.actionsRow}>
+                        <TouchableOpacity
+                            style={[styles.cameraButton, styles.actionBtnFlex]}
+                            onPress={handleOpenCamera}
+                            activeOpacity={0.8}
+                        >
+                            {isVideoMission ? (
+                                <>
+                                    <FontAwesome name="video-camera" size={20} color="white" style={styles.btnIcon} />
+                                    <Text style={styles.cameraButtonText}>Grabar video</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <FontAwesome name="camera" size={20} color="white" style={styles.btnIcon} />
+                                    <Text style={styles.cameraButtonText}>Sacar foto</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.skipButton, styles.actionBtnFlex]}
+                            onPress={handleSkipMission}
+                            disabled={!!skippingId}
+                        >
+                            <FontAwesome name="times" size={20} color="white" style={styles.btnIcon} />
+                            <Text style={styles.skipButtonText}>Saltear</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
 
@@ -204,10 +242,13 @@ export default function MissionsScreen() {
                 </View>
             )}
 
-            {allCompleted && (
+            {allResolved && (
                 <View style={styles.allDoneBlock}>
                     <Text style={styles.allDoneEmoji}>🏆</Text>
-                    <Text style={styles.allDoneTitle}>¡Las 13 completadas!</Text>
+                    <Text style={styles.allDoneTitle}>
+                        {completedIds.length === TOTAL_MISSIONS ? '¡Las 13 completadas!' : '¡Listo! 13 misiones'}
+                    </Text>
+                    <Text style={styles.progressPoints}>{userPoints.toLocaleString('es-AR')} puntos</Text>
                 </View>
             )}
 
@@ -259,43 +300,46 @@ const styles = StyleSheet.create({
     },
     progressBlock: {
         alignItems: 'center',
-        marginBottom: 20,
-    },
-    progressBig: {
-        fontFamily: Fonts.bold,
-        fontSize: 42,
-        color: 'white',
-    },
-    progressSlash: {
-        color: Colors.elegant.gold,
-        fontSize: 38,
-    },
-    progressLabel: {
-        fontFamily: Fonts.light,
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.7)',
-        marginTop: 2,
+        marginBottom: 16,
     },
     progressPoints: {
         fontFamily: Fonts.bold,
         fontSize: 16,
         color: Colors.elegant.gold,
-        marginTop: 6,
+        marginBottom: 10,
     },
-    dotsRow: {
+    boxesRow: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'center',
-        gap: 6,
-        marginTop: 10,
+        gap: 8,
     },
-    dot: {
-        width: 10,
-        height: 10,
-        borderRadius: 5,
-        backgroundColor: 'rgba(255,255,255,0.25)',
+    missionBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.15)',
+        borderWidth: 2,
+        borderColor: 'rgba(255,255,255,0.3)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    dotDone: {
-        backgroundColor: Colors.elegant.gold,
+    missionBoxDone: {
+        backgroundColor: 'rgba(46,204,113,0.3)',
+        borderColor: '#2ECC71',
+    },
+    missionBoxSkipped: {
+        backgroundColor: 'rgba(231,76,60,0.25)',
+        borderColor: '#E74C3C',
+    },
+    missionBoxCurrent: {
+        borderColor: Colors.elegant.gold,
+        backgroundColor: 'rgba(255,215,0,0.2)',
+    },
+    missionBoxNum: {
+        fontFamily: Fonts.bold,
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.9)',
     },
     currentBlock: {
         flex: 1,
@@ -322,21 +366,42 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: 'white',
     },
+    actionsRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    actionBtnFlex: {
+        flex: 1,
+    },
     cameraButton: {
         flexDirection: 'row',
         backgroundColor: Colors.river.primary,
-        paddingVertical: 16,
-        paddingHorizontal: 24,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    skipButton: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(231,76,60,0.9)',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
         borderRadius: 28,
         alignItems: 'center',
         justifyContent: 'center',
     },
     btnIcon: {
-        marginRight: 10,
+        marginRight: 8,
     },
     cameraButtonText: {
         fontFamily: Fonts.bold,
-        fontSize: 18,
+        fontSize: 16,
+        color: 'white',
+    },
+    skipButtonText: {
+        fontFamily: Fonts.bold,
+        fontSize: 16,
         color: 'white',
     },
     emptyState: {

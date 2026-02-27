@@ -68,10 +68,10 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
 
-    // 9. Misiones (Marketing) — orden fijo desde admin, no al azar
+    // 9. Misiones (Marketing) — CRUD desde admin
     match /missions/{missionId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated();
     }
 
     // 10. Progreso de misiones por usuario

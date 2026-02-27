@@ -32,6 +32,7 @@ export default function CameraScreen() {
     const [countdown, setCountdown] = useState<number | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
+    const [cameraReady, setCameraReady] = useState(false);
     const [facing, setFacing] = useState<CameraType>('back');
     const recordingPromiseRef = useRef<Promise<{ uri: string }> | null>(null);
 
@@ -83,10 +84,15 @@ export default function CameraScreen() {
     const startRecording = async () => {
         if (!cameraRef.current || isRecording) return;
         try {
+            if (!cameraReady) {
+                await new Promise((r) => setTimeout(r, 400));
+            }
             setIsRecording(true);
+            recordingPromiseRef.current = null;
             const promise = cameraRef.current.recordAsync();
             recordingPromiseRef.current = promise;
         } catch (e) {
+            console.error("startRecording", e);
             Alert.alert("Error", "No se pudo iniciar la grabación");
             setIsRecording(false);
         }
@@ -94,15 +100,25 @@ export default function CameraScreen() {
 
     const stopRecording = async () => {
         if (!cameraRef.current || !isRecording) return;
+        const promise = recordingPromiseRef.current;
         try {
             cameraRef.current.stopRecording();
-            const result = await recordingPromiseRef.current;
+            setIsRecording(false);
+            const result = promise ? await Promise.race([
+                promise,
+                new Promise<{ uri: string } | null>((_, rej) => setTimeout(() => rej(new Error("timeout")), 5000)),
+            ]) : null;
             recordingPromiseRef.current = null;
-            setIsRecording(false);
-            if (result?.uri) setCapturedVideo(result.uri);
+            if (result?.uri) {
+                setCapturedVideo(result.uri);
+            } else {
+                Alert.alert("Error", "No se obtuvo el video. Probá de nuevo.");
+            }
         } catch (e) {
-            Alert.alert("Error", "No se pudo detener la grabación");
+            console.error("stopRecording", e);
             setIsRecording(false);
+            recordingPromiseRef.current = null;
+            Alert.alert("Error", "No se pudo guardar el video. Probá de nuevo.");
         }
     };
 
@@ -191,15 +207,16 @@ export default function CameraScreen() {
                 <Text style={styles.previewTitle}>{isVideo ? '¡Así quedó el video!' : '¡Así quedó!'}</Text>
                 {capturedImage ? (
                     <Image source={{ uri: capturedImage }} style={styles.previewMedia} />
-                ) : (
+                ) : capturedVideo ? (
                     <Video
-                        source={{ uri: capturedVideo! }}
+                        source={{ uri: capturedVideo }}
                         style={styles.previewMedia}
                         useNativeControls
                         isLooping={false}
                         shouldPlay
+                        onError={(e) => console.warn("Video preview error", e)}
                     />
-                )}
+                ) : null}
                 <View style={styles.previewOverlay}>
                     <Text style={styles.watermark}>EL BAR MITZVA DE MEDINA</Text>
                 </View>
@@ -207,18 +224,22 @@ export default function CameraScreen() {
                 {isUploading ? (
                     <View style={styles.uploadingRow}>
                         <ActivityIndicator color={Colors.river.primary} size="large" />
-                        <Text style={styles.uploadingText}>Subiendo...</Text>
+                        <Text style={styles.uploadingText}>{isVideo ? 'Subiendo video...' : 'Subiendo...'}</Text>
                     </View>
                 ) : (
                     <View style={styles.controlRow}>
+                        <TouchableOpacity
+                            style={[styles.actionBtn, styles.primaryActionBtn]}
+                            onPress={uploadAndComplete}
+                        >
+                            <FontAwesome name="check-circle" size={20} color="white" style={{ marginRight: 8 }} />
+                            <Text style={styles.btnText}>Subir y cumplir</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#555' }]} onPress={retake}>
                             <Text style={styles.btnText}>Nueva</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#25D366' }]} onPress={handleShare}>
                             <FontAwesome name="whatsapp" size={20} color="white" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: Colors.river.primary }]} onPress={uploadAndComplete}>
-                            <Text style={styles.btnText}>Subir y cumplir</Text>
                         </TouchableOpacity>
                     </View>
                 )}
@@ -229,7 +250,12 @@ export default function CameraScreen() {
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
-            <CameraView style={styles.camera} ref={cameraRef} facing={facing}>
+            <CameraView
+                style={styles.camera}
+                ref={cameraRef}
+                facing={facing}
+                onCameraReady={() => setTimeout(() => setCameraReady(true), 300)}
+            >
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
                         <FontAwesome name="close" size={28} color="white" />
@@ -406,14 +432,23 @@ const styles = StyleSheet.create({
     },
     controlRow: {
         flexDirection: 'row',
-        justifyContent: 'space-around',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: 10,
         paddingHorizontal: 16,
-        marginTop: 24,
+        marginTop: 20,
     },
     actionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingVertical: 14,
-        paddingHorizontal: 24,
+        paddingHorizontal: 20,
         borderRadius: 28,
+    },
+    primaryActionBtn: {
+        backgroundColor: Colors.river.primary,
+        minWidth: 180,
+        justifyContent: 'center',
     },
     btnText: {
         color: 'white',

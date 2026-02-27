@@ -45,7 +45,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Stack, useRouter } from 'expo-router';
 import { signInAnonymously } from 'firebase/auth';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DraggableFlatList from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -880,17 +880,21 @@ export default function AdminPanel() {
                 {currentView === 'HOMENAJES' && (
                     <View style={styles.section}>
                         {renderHeader('VIDEOS HOMENAJES')}
-                        {deletingHomenajeId && (
-                            <View style={[styles.listItem, { backgroundColor: '#4d1a1a', marginBottom: 10 }]}>
-                                <Text style={{ color: '#fff', flex: 1 }}>¿Borrar este video homenaje?</Text>
-                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginLeft: 8 }]} onPress={handleConfirmDeleteHomenaje} disabled={isLoading}>
-                                    <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginLeft: 8 }]} onPress={() => setDeletingHomenajeId(null)} disabled={isLoading}>
-                                    <Text style={styles.addBtnText}>NO</Text>
-                                </TouchableOpacity>
+                        <Modal visible={!!deletingHomenajeId} transparent animationType="fade">
+                            <View style={styles.modalOverlay}>
+                                <View style={[styles.modalBox, { borderColor: '#c00' }]}>
+                                    <Text style={styles.modalTitle}>¿Borrar este video homenaje?</Text>
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => setDeletingHomenajeId(null)} disabled={isLoading}>
+                                            <Text style={styles.addBtnText}>NO</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginBottom: 0 }]} onPress={handleConfirmDeleteHomenaje} disabled={isLoading}>
+                                            <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
                             </View>
-                        )}
+                        </Modal>
                         <TextInput style={styles.inputField} placeholder="Título" value={homTitle} onChangeText={setHomTitle} />
                         <TextInput style={styles.inputField} placeholder="YouTube ID" value={homYoutube} onChangeText={setHomYoutube} />
                         <TextInput style={styles.inputField} placeholder="Orden" value={homOrder} onChangeText={setHomOrder} keyboardType="numeric" />
@@ -938,21 +942,29 @@ export default function AdminPanel() {
                                 />
                             </GestureHandlerRootView>
                         </View>
-                        {editingHomenaje && (
-                            <View style={[styles.listItem, { backgroundColor: '#2a2a2a', marginTop: 16, paddingVertical: 16, borderWidth: 1, borderColor: Colors.elegant.gold }]}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ color: Colors.elegant.gold, fontWeight: 'bold', marginBottom: 4 }}>Editando: {editingHomenaje.title}</Text>
-                                    <Text style={{ color: '#999', fontSize: 11, marginBottom: 10 }}>Cambiá los campos y tocá GUARDAR.</Text>
-                                    <TextInput style={styles.inputField} placeholder="Título" value={homEditTitle} onChangeText={setHomEditTitle} />
-                                    <TextInput style={styles.inputField} placeholder="YouTube ID o enlace" value={homEditYoutube} onChangeText={setHomEditYoutube} />
-                                    <TextInput style={styles.inputField} placeholder="Orden" value={homEditOrder} onChangeText={setHomEditOrder} keyboardType="numeric" />
-                                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-                                        <TouchableOpacity style={styles.addBtn} onPress={handleSaveEditHomenaje} disabled={isLoading}><Text style={styles.addBtnText}>GUARDAR</Text></TouchableOpacity>
-                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555' }]} onPress={() => { setEditingHomenaje(null); setHomEditTitle(''); setHomEditYoutube(''); setHomEditOrder(''); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
-                                    </View>
+                        <Modal visible={!!editingHomenaje} transparent animationType="fade">
+                            <View style={styles.modalOverlay}>
+                                <View style={styles.modalBox}>
+                                    {editingHomenaje && (
+                                        <>
+                                            <Text style={styles.modalTitle}>Editando: {editingHomenaje.title}</Text>
+                                            <Text style={{ color: '#999', fontSize: 11, marginBottom: 10 }}>Cambiá los campos y tocá GUARDAR.</Text>
+                                            <TextInput style={styles.inputField} placeholder="Título" value={homEditTitle} onChangeText={setHomEditTitle} />
+                                            <TextInput style={styles.inputField} placeholder="YouTube ID o enlace" value={homEditYoutube} onChangeText={setHomEditYoutube} />
+                                            <TextInput style={styles.inputField} placeholder="Orden" value={homEditOrder} onChangeText={setHomEditOrder} keyboardType="numeric" />
+                                            <View style={styles.modalActions}>
+                                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => { setEditingHomenaje(null); setHomEditTitle(''); setHomEditYoutube(''); setHomEditOrder(''); }}>
+                                                    <Text style={styles.addBtnText}>CANCELAR</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity style={[styles.addBtn, { marginBottom: 0 }]} onPress={handleSaveEditHomenaje} disabled={isLoading}>
+                                                    <Text style={styles.addBtnText}>GUARDAR</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </>
+                                    )}
                                 </View>
                             </View>
-                        )}
+                        </Modal>
                     </View>
                 )}
 
@@ -1039,17 +1051,21 @@ export default function AdminPanel() {
                                 <Text style={styles.addBtnText}>BORRAR TODO</Text>
                             </TouchableOpacity>
                         </View>
-                        {confirmDeleteAllTrivia && (
-                            <View style={[styles.listItem, { backgroundColor: '#4d1a1a', marginBottom: 12 }]}>
-                                <Text style={{ color: '#fff', flex: 1 }}>¿Borrar todas las preguntas y todos los videos de trivia?</Text>
-                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginLeft: 8 }]} onPress={doDeleteAllTrivia} disabled={isLoading}>
-                                    <Text style={styles.addBtnText}>SÍ, BORRAR TODO</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginLeft: 8 }]} onPress={() => setConfirmDeleteAllTrivia(false)}>
-                                    <Text style={styles.addBtnText}>NO</Text>
-                                </TouchableOpacity>
+                        <Modal visible={confirmDeleteAllTrivia} transparent animationType="fade">
+                            <View style={styles.modalOverlay}>
+                                <View style={[styles.modalBox, { borderColor: '#c00' }]}>
+                                    <Text style={styles.modalTitle}>¿Borrar todas las preguntas y todos los videos de trivia?</Text>
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => setConfirmDeleteAllTrivia(false)}>
+                                            <Text style={styles.addBtnText}>NO</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginBottom: 0 }]} onPress={doDeleteAllTrivia} disabled={isLoading}>
+                                            <Text style={styles.addBtnText}>SÍ, BORRAR TODO</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
                             </View>
-                        )}
+                        </Modal>
                         {seedMessage && (
                             <View style={[styles.listItem, { backgroundColor: seedMessage.type === 'ok' ? '#1a3d1a' : '#4d1a1a', marginBottom: 12 }]}>
                                 <Text style={{ color: '#fff', flex: 1 }}>{seedMessage.text}</Text>
@@ -1081,13 +1097,42 @@ export default function AdminPanel() {
                                         </TouchableOpacity>
                                     </View>
                                 ))}
-                                <Text style={[styles.inputLabel, { marginTop: 16 }]}>{editingQuestion ? 'Editar pregunta' : 'Nueva pregunta'}</Text>
-                                {editingQuestion && (
-                                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                                        <TouchableOpacity style={[styles.addBtn, { flex: 1 }]} onPress={handleSaveEditQuestion} disabled={isLoading}><Text style={styles.addBtnText}>GUARDAR CAMBIOS</Text></TouchableOpacity>
-                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', flex: 1 }]} onPress={() => { setEditingQuestion(null); setTriviaQuestion(''); setTriviaOpt1(''); setTriviaOpt2(''); setTriviaOpt3(''); setTriviaOpt4(''); setTriviaOrder(''); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
+                                <Modal visible={!!editingQuestion} transparent animationType="fade">
+                                    <View style={styles.modalOverlay}>
+                                        <ScrollView contentContainerStyle={{ padding: 24 }} style={{ width: '100%' }}>
+                                            <View style={[styles.modalBox, { maxWidth: '100%', marginBottom: 20 }]}>
+                                                <Text style={styles.modalTitle}>Editar pregunta</Text>
+                                                <TextInput style={styles.inputField} placeholder="Pregunta" value={triviaQuestion} onChangeText={setTriviaQuestion} />
+                                                <Text style={styles.inputLabel}>Opción 1 (índice 0)</Text>
+                                                <TextInput style={styles.inputField} placeholder="Opción 1" value={triviaOpt1} onChangeText={setTriviaOpt1} />
+                                                <Text style={styles.inputLabel}>Opción 2 (índice 1)</Text>
+                                                <TextInput style={styles.inputField} placeholder="Opción 2" value={triviaOpt2} onChangeText={setTriviaOpt2} />
+                                                <Text style={styles.inputLabel}>Opción 3 (índice 2)</Text>
+                                                <TextInput style={styles.inputField} placeholder="Opción 3" value={triviaOpt3} onChangeText={setTriviaOpt3} />
+                                                <Text style={styles.inputLabel}>Opción 4 (índice 3)</Text>
+                                                <TextInput style={styles.inputField} placeholder="Opción 4" value={triviaOpt4} onChangeText={setTriviaOpt4} />
+                                                <Text style={styles.inputLabel}>Índice correcta (0-3)</Text>
+                                                <View style={[styles.typeRow, { marginBottom: 10 }]}>
+                                                    {[0, 1, 2, 3].map((i) => (
+                                                        <TouchableOpacity key={i} style={[styles.typeMiniBtn, triviaCorrect === i && styles.typeMiniBtnActive]} onPress={() => setTriviaCorrect(i)}>
+                                                            <Text style={styles.typeMiniText}>{i}</Text>
+                                                        </TouchableOpacity>
+                                                    ))}
+                                                </View>
+                                                <TextInput style={styles.inputField} placeholder="Orden" value={triviaOrder} onChangeText={setTriviaOrder} keyboardType="numeric" />
+                                                <View style={styles.modalActions}>
+                                                    <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => { setEditingQuestion(null); setTriviaQuestion(''); setTriviaOpt1(''); setTriviaOpt2(''); setTriviaOpt3(''); setTriviaOpt4(''); setTriviaOrder(''); }}>
+                                                        <Text style={styles.addBtnText}>CANCELAR</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity style={[styles.addBtn, { marginBottom: 0 }]} onPress={handleSaveEditQuestion} disabled={isLoading}>
+                                                        <Text style={styles.addBtnText}>GUARDAR CAMBIOS</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        </ScrollView>
                                     </View>
-                                )}
+                                </Modal>
+                                <Text style={[styles.inputLabel, { marginTop: 16 }]}>Nueva pregunta</Text>
                                 <TextInput style={styles.inputField} placeholder="Pregunta" value={triviaQuestion} onChangeText={setTriviaQuestion} />
                                 <Text style={styles.inputLabel}>Opción 1 (correcta = índice 0)</Text>
                                 <TextInput style={styles.inputField} placeholder="Ej: Boca" value={triviaOpt1} onChangeText={setTriviaOpt1} />
@@ -1115,33 +1160,45 @@ export default function AdminPanel() {
                         {triviaSubView === 'videos' && (
                             <>
                                 <Text style={[styles.inputLabel, { marginTop: 4 }]}>Listado de videos (tocá lápiz para poner YouTube y que se reproduzca bien)</Text>
-                                {deletingVideoId && (
-                                    <View style={[styles.listItem, { backgroundColor: '#4d1a1a', marginBottom: 10 }]}>
-                                        <Text style={{ color: '#fff', flex: 1 }}>¿Borrar este video?</Text>
-                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginLeft: 8 }]} onPress={confirmDeleteTriviaVideo} disabled={isLoading}>
-                                            <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginLeft: 8 }]} onPress={() => setDeletingVideoId(null)}>
-                                            <Text style={styles.addBtnText}>NO</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-                                {editingVideo && (
-                                    <View style={[styles.listItem, { backgroundColor: '#333', marginBottom: 10 }]}>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={{ color: Colors.elegant.gold, fontWeight: 'bold' }}>YouTube: {editingVideo.name}</Text>
-                                            <TextInput style={[styles.inputField, { marginTop: 8 }]} placeholder="Enlace de YouTube o ID del video" value={editingVideoYoutubeId} onChangeText={setEditingVideoYoutubeId} />
-                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
-                                                <Switch value={editingVideoVisible} onValueChange={setEditingVideoVisible} trackColor={{ false: '#555', true: Colors.elegant.gold }} thumbColor="#fff" />
-                                                <Text style={{ color: '#fff', marginLeft: 10 }}>Visible en la trivia</Text>
-                                            </View>
-                                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-                                                <TouchableOpacity style={styles.addBtn} onPress={handleSaveEditVideo} disabled={isLoading}><Text style={styles.addBtnText}>GUARDAR</Text></TouchableOpacity>
-                                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555' }]} onPress={() => { setEditingVideo(null); setEditingVideoYoutubeId(''); setEditingVideoVisible(true); }}><Text style={styles.addBtnText}>CANCELAR</Text></TouchableOpacity>
+                                <Modal visible={!!deletingVideoId} transparent animationType="fade">
+                                    <View style={styles.modalOverlay}>
+                                        <View style={[styles.modalBox, { borderColor: '#c00' }]}>
+                                            <Text style={styles.modalTitle}>¿Borrar este video?</Text>
+                                            <View style={styles.modalActions}>
+                                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => setDeletingVideoId(null)}>
+                                                    <Text style={styles.addBtnText}>NO</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginBottom: 0 }]} onPress={confirmDeleteTriviaVideo} disabled={isLoading}>
+                                                    <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
+                                                </TouchableOpacity>
                                             </View>
                                         </View>
                                     </View>
-                                )}
+                                </Modal>
+                                <Modal visible={!!editingVideo} transparent animationType="fade">
+                                    <View style={styles.modalOverlay}>
+                                        <View style={styles.modalBox}>
+                                            {editingVideo && (
+                                                <>
+                                                    <Text style={styles.modalTitle}>Editar: {editingVideo.name}</Text>
+                                                    <TextInput style={styles.inputField} placeholder="Enlace de YouTube o ID del video" value={editingVideoYoutubeId} onChangeText={setEditingVideoYoutubeId} />
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                                                        <Switch value={editingVideoVisible} onValueChange={setEditingVideoVisible} trackColor={{ false: '#555', true: Colors.elegant.gold }} thumbColor="#fff" />
+                                                        <Text style={{ color: '#fff', marginLeft: 10 }}>Visible en la trivia</Text>
+                                                    </View>
+                                                    <View style={styles.modalActions}>
+                                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => { setEditingVideo(null); setEditingVideoYoutubeId(''); setEditingVideoVisible(true); }}>
+                                                            <Text style={styles.addBtnText}>CANCELAR</Text>
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity style={[styles.addBtn, { marginBottom: 0 }]} onPress={handleSaveEditVideo} disabled={isLoading}>
+                                                            <Text style={styles.addBtnText}>GUARDAR</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                </>
+                                            )}
+                                        </View>
+                                    </View>
+                                </Modal>
                                 {triviaVideos.map((v) => (
                                     <View key={v.id} style={styles.listItem}>
                                         <View style={{ flex: 1 }}>
@@ -1184,17 +1241,50 @@ export default function AdminPanel() {
                             <Text style={[styles.addBtnText, { color: '#000' }]}>CARGAR 50 MISIONES INICIALES (pool)</Text>
                         </TouchableOpacity>
 
-                        {deletingMissionId && (
-                            <View style={[styles.listItem, { backgroundColor: '#4d1a1a', marginBottom: 10 }]}>
-                                <Text style={{ color: '#fff', flex: 1 }}>¿Borrar esta misión?</Text>
-                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginLeft: 8 }]} onPress={handleConfirmDeleteMission} disabled={isLoading}>
-                                    <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginLeft: 8 }]} onPress={() => setDeletingMissionId(null)}>
-                                    <Text style={styles.addBtnText}>NO</Text>
-                                </TouchableOpacity>
+                        <Modal visible={!!deletingMissionId} transparent animationType="fade">
+                            <View style={styles.modalOverlay}>
+                                <View style={[styles.modalBox, { borderColor: '#c00' }]}>
+                                    <Text style={styles.modalTitle}>¿Borrar esta misión?</Text>
+                                    <View style={styles.modalActions}>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => setDeletingMissionId(null)}>
+                                            <Text style={styles.addBtnText}>NO</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#c00', marginBottom: 0 }]} onPress={handleConfirmDeleteMission} disabled={isLoading}>
+                                            <Text style={styles.addBtnText}>SÍ, BORRAR</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
                             </View>
-                        )}
+                        </Modal>
+
+                        <Modal visible={!!editingMission} transparent animationType="fade">
+                            <View style={styles.modalOverlay}>
+                                <ScrollView contentContainerStyle={{ padding: 24 }} style={{ width: '100%' }}>
+                                    <View style={[styles.modalBox, { maxWidth: '100%', marginBottom: 20 }]}>
+                                        <Text style={styles.modalTitle}>Editar misión</Text>
+                                        <TextInput style={styles.inputField} placeholder="Título de la misión *" value={missionTitle} onChangeText={setMissionTitle} />
+                                        <TextInput style={styles.inputField} placeholder="Descripción" value={missionDesc} onChangeText={setMissionDesc} />
+                                        <TextInput style={styles.inputField} placeholder="Tipo (primo, tío, amigo...)" value={missionType} onChangeText={setMissionType} />
+                                        <TextInput style={styles.inputField} placeholder="Ícono (emoji ej. 📸)" value={missionIcon} onChangeText={setMissionIcon} />
+                                        <TextInput style={styles.inputField} placeholder="Orden (número)" value={missionOrder} onChangeText={setMissionOrder} keyboardType="numeric" />
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                                            <Text style={{ color: '#AAA', marginRight: 10 }}>Activa</Text>
+                                            <Switch value={missionActive} onValueChange={setMissionActive} trackColor={{ false: '#555', true: Colors.elegant.gold }} />
+                                        </View>
+                                        <TextInput style={styles.inputField} placeholder="Premio (opcional)" value={missionPrize} onChangeText={setMissionPrize} />
+                                        <TextInput style={styles.inputField} placeholder="Puntos (opcional)" value={missionPoints} onChangeText={setMissionPoints} keyboardType="numeric" />
+                                        <View style={styles.modalActions}>
+                                            <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555', marginBottom: 0 }]} onPress={() => { setEditingMission(null); setMissionTitle(''); setMissionDesc(''); setMissionType(''); setMissionIcon(''); setMissionOrder(''); setMissionPrize(''); setMissionPoints(''); }}>
+                                                <Text style={styles.addBtnText}>CANCELAR</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity style={[styles.addBtn, { marginBottom: 0 }]} onPress={handleSaveEditMission} disabled={isLoading}>
+                                                <Text style={styles.addBtnText}>GUARDAR CAMBIOS</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                </ScrollView>
+                            </View>
+                        </Modal>
 
                         <Text style={[styles.inputLabel, { marginTop: 12 }]}>Nueva misión</Text>
                         <TextInput style={styles.inputField} placeholder="Título de la misión *" value={missionTitle} onChangeText={setMissionTitle} />
@@ -1208,21 +1298,9 @@ export default function AdminPanel() {
                         </View>
                         <TextInput style={styles.inputField} placeholder="Premio (opcional)" value={missionPrize} onChangeText={setMissionPrize} />
                         <TextInput style={styles.inputField} placeholder="Puntos (opcional)" value={missionPoints} onChangeText={setMissionPoints} keyboardType="numeric" />
-
-                        {editingMission ? (
-                            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 15 }}>
-                                <TouchableOpacity style={styles.addBtn} onPress={handleSaveEditMission} disabled={isLoading}>
-                                    <Text style={styles.addBtnText}>GUARDAR CAMBIOS</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.addBtn, { backgroundColor: '#555' }]} onPress={() => { setEditingMission(null); setMissionTitle(''); setMissionDesc(''); setMissionType(''); setMissionIcon(''); setMissionOrder(''); setMissionPrize(''); setMissionPoints(''); }}>
-                                    <Text style={styles.addBtnText}>CANCELAR</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <TouchableOpacity style={styles.addBtn} onPress={handleAddMission} disabled={isLoading}>
-                                <Text style={styles.addBtnText}>AGREGAR MISIÓN</Text>
-                            </TouchableOpacity>
-                        )}
+                        <TouchableOpacity style={styles.addBtn} onPress={handleAddMission} disabled={isLoading}>
+                            <Text style={styles.addBtnText}>AGREGAR MISIÓN</Text>
+                        </TouchableOpacity>
 
                         <Text style={[styles.inputLabel, { marginTop: 8 }]}>Listado ({missionsList.length}) — tocá lápiz para editar</Text>
                         {missionsList.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((m) => (
@@ -1290,5 +1368,9 @@ const styles = StyleSheet.create({
     mediaCardVisibleLabel: { color: '#AAA', fontSize: 10 },
     delMedia: { backgroundColor: 'rgba(255,0,0,0.7)', padding: 6, borderRadius: 8 },
     dangerBtn: { backgroundColor: '#CC0000', padding: 20, borderRadius: 10, alignItems: 'center' },
-    dangerBtnText: { color: 'white', fontWeight: 'bold' }
+    dangerBtnText: { color: 'white', fontWeight: 'bold' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    modalBox: { backgroundColor: '#1a1a1a', borderRadius: 12, padding: 20, width: '100%', maxWidth: 400, borderWidth: 1, borderColor: Colors.elegant.gold },
+    modalTitle: { color: Colors.elegant.gold, fontWeight: 'bold', fontSize: 16, marginBottom: 12 },
+    modalActions: { flexDirection: 'row', gap: 10, marginTop: 16, justifyContent: 'flex-end' },
 });

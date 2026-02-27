@@ -140,6 +140,7 @@ export interface Mission {
 export interface UserMissionProgress {
     id: string; // userId
     completedMissionIds: string[];
+    skippedMissionIds?: string[];
     updatedAt: any;
 }
 
@@ -481,9 +482,15 @@ export const uploadMediaFile = async (uri: string, path: string): Promise<string
             if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
             blob = await response.blob();
         } else if (uri.startsWith('file://')) {
-            // En iOS/Android fetch(file://) suele fallar; usar expo-file-system (File implementa Blob)
-            const file = new ExpoFile(uri);
-            blob = file as unknown as Blob;
+            try {
+                const response = await fetch(uri);
+                if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+                blob = await response.blob();
+            } catch (fetchErr) {
+                // Fallback para cuando fetch(file://) falla (ej. en algunos Android/iOS)
+                const file = new ExpoFile(uri);
+                blob = file as unknown as Blob;
+            }
         } else {
             const response = await fetch(uri);
             if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
@@ -677,6 +684,24 @@ export const completeMission = async (userId: string, missionId: string, pointsT
         }
     } catch (e) {
         console.error("Error completing mission", e);
+        throw e;
+    }
+};
+
+export const skipMission = async (userId: string, missionId: string) => {
+    try {
+        const progressRef = doc(db, 'mission_progress', userId);
+        const snap = await getDoc(progressRef);
+        const data = snap.exists() ? snap.data() : {};
+        const skipped: string[] = data.skippedMissionIds || [];
+        if (skipped.includes(missionId)) return;
+        await setDoc(progressRef, {
+            completedMissionIds: data.completedMissionIds || [],
+            skippedMissionIds: [...skipped, missionId],
+            updatedAt: new Date(),
+        }, { merge: true });
+    } catch (e) {
+        console.error("Error skipping mission", e);
         throw e;
     }
 };
